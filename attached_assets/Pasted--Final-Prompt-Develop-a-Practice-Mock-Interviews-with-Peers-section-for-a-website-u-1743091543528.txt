@@ -1,0 +1,127 @@
+### **Final Prompt:**  
+
+Develop a **Practice Mock Interviews with Peers** section for a website using **React (frontend with Tailwind CSS), Express (backend with JavaScript), and MongoDB (database)**. The system should allow users to find peers, schedule practice interviews, and conduct sessions.  
+
+### **Tech Stack:**  
+- **Frontend:** React.js (JavaScript) + Tailwind CSS  
+- **Backend:** Express.js + Node.js (JavaScript)  
+- **Database:** MongoDB  
+
+---
+
+### **Features to Implement:**  
+
+#### **Frontend (React.js + Tailwind CSS)**  
+
+1. **Dashboard**  
+   - Displays a list of available peers for mock interviews.  
+   - Shows user profiles with **skills, availability, and experience level**.  
+   - Use **Tailwind CSS** for a clean, responsive, and modern UI.  
+
+2. **Matching System**  
+   - Users should be able to find peers based on matching criteria:  
+     - **Same skill level**  
+     - **Complementary experience**  
+     - **Overlapping availability**  
+   - A **"Find Best Match"** button should prioritize the most relevant match.  
+
+3. **Match Requests Section**  
+   - **Incoming Match Requests:**  
+     - Displays match requests where the logged-in user is the **matched peer**.  
+     - Shows requester details (**name, skills, proposed time**).  
+     - Users can **accept** ✅ or **decline** ❌ the request.  
+   - **Outgoing Match Requests:**  
+     - Displays requests sent by the logged-in user but not yet accepted.  
+     - Shows the peer's name and status (`Pending`, `Accepted`, `Declined`).  
+
+4. **Scheduling Feature**  
+   - Users can select a **date and time** for an interview.  
+   - A **calendar component** should dynamically show available slots.  
+   - Users can **accept or decline interview requests**.  
+
+5. **Interview Room (Placeholder for Now)**  
+   - A simple **video call or chat interface**.  
+   - Can integrate **Zoom/Google Meet links** or use WebRTC in the future.  
+
+---
+
+### **Backend (Express.js + JavaScript)**  
+
+1. **Authentication System**  
+   - Implement **JWT-based login/signup** for users.  
+   - Secure API routes with authentication middleware.  
+
+2. **Matching Algorithm (Best Approach)**  
+   - **Weighted Matching System** based on:  
+     - **Skill Level:** Match peers with similar or complementary experience.  
+     - **Availability:** Filter users based on overlapping free slots.  
+   - Implement this logic in a **matchmaking API endpoint** (`/api/match`).  
+
+3. **Match Requests API**  
+   - **GET `/api/match-requests`**  
+     - Fetches match requests for the logged-in user.  
+     - Returns separate arrays for **incoming** and **outgoing** requests.  
+   - **POST `/api/match-request`**  
+     - Sends a match request to a peer.  
+   - **PATCH `/api/match-request/:id`**  
+     - Accept or decline a request.  
+
+4. **Scheduling API**  
+   - **POST `/api/book-slot`**: Users can book interview slots.  
+   - **GET `/api/available-peers`**: Fetch peers with open slots.  
+   - **DELETE `/api/cancel-slot`**: Cancel bookings if needed.  
+
+---
+
+### **Database (MongoDB)**  
+
+#### **User Profiles Collection (`users`)**  
+```json
+{
+  "_id": "ObjectID",
+  "name": "String",
+  "email": "String (unique)",
+  "password": "Hashed",
+  "skills": ["String"],
+  "experience_level": "Beginner | Intermediate | Advanced",
+  "availability": [
+    {
+      "day": "Monday",
+      "time_slots": ["09:00-10:00", "14:00-15:00"]
+    }
+  ]
+}
+```
+
+#### **Match Requests Collection (`match_requests`)**  
+```json
+{
+  "_id": "ObjectID",
+  "requester_id": "ObjectID (Ref to users)",
+  "matched_peer_id": "ObjectID (Ref to users)",
+  "status": "Pending | Accepted | Declined",
+  "requested_time": "Timestamp"
+}
+```
+
+#### **Interview Slots Collection (`interview_slots`)**  
+```json
+{
+  "_id": "ObjectID",
+  "interviewer_id": "ObjectID (Ref to users)",
+  "interviewee_id": "ObjectID (Ref to users, nullable)",
+  "slot_time": "Timestamp",
+  "status": "Available | Booked | Completed"
+}
+```
+
+---
+
+### **Final User Flow:**  
+1. **User logs in** → See dashboard with available peers.  
+2. **Find a match** → Send a match request.  
+3. **User receives a match request** → Accept or decline.  
+4. **Schedule an interview** → Select a slot from the calendar.  
+5. **Conduct the interview** → (Future: Integrate video calls).  
+
+🚀 **This prompt ensures a seamless matching and scheduling system using JavaScript, Express, MongoDB, React, and Tailwind CSS!** Let me know if you need further tweaks. 🎯
