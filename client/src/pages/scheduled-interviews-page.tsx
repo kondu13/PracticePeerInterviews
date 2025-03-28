@@ -5,6 +5,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import InterviewCard from "@/components/interview-card";
 import InterviewRoomModal from "@/components/interview-room-modal";
+import ScheduleInterviewButton from "@/components/schedule-interview-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
@@ -70,9 +71,14 @@ export default function ScheduledInterviewsPage() {
       {/* Main Content */}
       <main className="flex-1 overflow-auto pb-16 md:pb-0">
         <div className="p-6">
-          <div className="mb-8">
-            <h2 className="text-2xl font-bold text-gray-900">Scheduled Interviews</h2>
-            <p className="mt-1 text-gray-600">View your upcoming and past interview sessions.</p>
+          <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">Scheduled Interviews</h2>
+              <p className="mt-1 text-gray-600">View your upcoming and past interview sessions.</p>
+            </div>
+            <div className="mt-4 sm:mt-0">
+              <ScheduleInterviewButton />
+            </div>
           </div>
           
           {/* Tabs Navigation */}

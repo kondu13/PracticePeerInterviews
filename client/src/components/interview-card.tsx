@@ -1,13 +1,12 @@
 import { InterviewSlot } from "@shared/schema";
+import { Card, CardContent, CardFooter } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { useMutation } from "@tanstack/react-query";
-import { format, formatDistance, isAfter, addMinutes } from "date-fns";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { Calendar, Clock, Video, X } from "lucide-react";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { format } from "date-fns";
+import { Calendar, Clock, User, Video, ExternalLink } from "lucide-react";
 
 interface InterviewCardProps {
   interview: InterviewSlot & { 
@@ -21,171 +20,149 @@ interface InterviewCardProps {
 
 export default function InterviewCard({ interview, isPast = false, onJoin }: InterviewCardProps) {
   const { toast } = useToast();
-  const partner = interview.partner;
   
-  const getInitials = (name: string) => {
-    return name
-      ? name.split(' ').map(part => part[0]).join('').toUpperCase()
-      : "?";
+  // Function to determine the partner
+  const partner = interview.interviewer && interview.interviewee 
+    ? (interview.interviewerId === interview.interviewee.id 
+      ? interview.interviewer 
+      : interview.interviewee)
+    : interview.partner;
+  
+  // Format dates for display
+  const formatDate = (date: string | Date) => {
+    return format(new Date(date), "EEEE, MMMM d, yyyy");
   };
   
-  const getExperienceBadgeVariant = (level: string) => {
-    switch (level) {
-      case "Beginner":
-        return "beginner";
-      case "Intermediate":
-        return "intermediate";
-      case "Advanced":
-        return "advanced";
-      default:
-        return "default";
-    }
+  const formatTime = (date: string | Date) => {
+    return format(new Date(date), "h:mm a");
   };
-  
-  // Format date/time for display
-  const formatDateTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return `${format(date, 'EEEE, MMMM d')} · ${format(date, 'h:mm a')} - ${format(new Date(interview.endTime), 'h:mm a')}`;
-  };
-  
-  // Calculate time until interview starts or after it ended
-  const getTimeStatus = () => {
-    const interviewTime = new Date(interview.slotTime);
-    const now = new Date();
-    const endTime = new Date(interview.endTime);
-    
-    if (isAfter(interviewTime, now)) {
-      return {
-        message: `Starts ${formatDistance(interviewTime, now, { addSuffix: true })}`,
-        isStartingSoon: interviewTime.getTime() - now.getTime() < 15 * 60 * 1000, // Within 15 minutes
-      };
-    } else if (isAfter(endTime, now)) {
-      return {
-        message: "In progress",
-        isStartingSoon: true,
-      };
-    } else {
-      return {
-        message: `Ended ${formatDistance(endTime, now, { addSuffix: true })}`,
-        isStartingSoon: false,
-      };
-    }
-  };
-  
-  const timeStatus = getTimeStatus();
   
   // Cancel interview mutation
   const cancelInterviewMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("DELETE", `/api/cancel-slot/${interview.id}`, undefined);
-      return await res.json();
+    mutationFn: async (id: number) => {
+      const response = await apiRequest("POST", `/api/cancel-slot/${id}`, {});
+      return response.json();
     },
     onSuccess: () => {
       toast({
         title: "Interview cancelled",
-        description: `You've cancelled the interview with ${partner?.name}.`,
+        description: "The interview has been cancelled successfully.",
       });
       queryClient.invalidateQueries({ queryKey: ["/api/interviews"] });
     },
     onError: (error: Error) => {
       toast({
-        title: "Error cancelling interview",
-        description: error.message,
+        title: "Failed to cancel interview",
+        description: error.message || "Please try again later.",
         variant: "destructive",
       });
-    }
+    },
   });
   
-  if (!partner) {
-    return null;
-  }
+  // Handle cancellation
+  const handleCancel = () => {
+    if (confirm("Are you sure you want to cancel this interview?")) {
+      cancelInterviewMutation.mutate(interview.id);
+    }
+  };
+  
+  // Determine if the interview is joinable (is in the near future or in progress)
+  const isJoinable = !isPast && interview.status === "Booked";
   
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden p-5">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div className="flex items-center">
-          <Avatar className="h-12 w-12">
-            {partner.avatarUrl ? (
-              <AvatarImage src={partner.avatarUrl} alt={partner.name} />
-            ) : (
-              <AvatarFallback>{getInitials(partner.name)}</AvatarFallback>
-            )}
-          </Avatar>
-          <div className="ml-3">
-            <h3 className="text-lg font-medium text-gray-900">{partner.name}</h3>
-            <div className="flex items-center mt-1">
-              <Badge variant={getExperienceBadgeVariant(partner.experienceLevel)}>
-                {partner.experienceLevel}
-              </Badge>
+    <Card className="overflow-hidden border border-gray-200 hover:shadow-md transition-shadow">
+      <CardContent className="p-0">
+        <div className="border-b border-gray-100 bg-gray-50 px-4 py-3 flex justify-between items-center">
+          <div className="flex items-center">
+            <Calendar className="h-4 w-4 mr-2 text-gray-500" />
+            <span className="text-sm font-medium">{formatDate(interview.slotTime)}</span>
+          </div>
+          <Badge variant={
+            interview.status === "Completed" ? "secondary" : 
+            interview.status === "Cancelled" ? "destructive" : 
+            "default"
+          }>
+            {interview.status}
+          </Badge>
+        </div>
+        
+        <div className="p-4 space-y-4">
+          {/* Time */}
+          <div className="flex items-start">
+            <Clock className="h-4 w-4 mr-2 mt-0.5 text-gray-500" />
+            <div>
+              <p className="text-sm font-medium">
+                {formatTime(interview.slotTime)} - {formatTime(interview.endTime)}
+              </p>
+              <p className="text-xs text-gray-500">
+                Duration: {Math.round((new Date(interview.endTime).getTime() - new Date(interview.slotTime).getTime()) / (1000 * 60))} minutes
+              </p>
             </div>
           </div>
-        </div>
-        
-        <div className="flex-grow md:mx-4">
-          <div className="flex flex-wrap gap-1 mb-2">
-            {partner.skills?.slice(0, 3).map((skill: string, index: number) => (
-              <Badge key={index} variant="skill">{skill}</Badge>
-            ))}
-          </div>
-          <div>
-            <p className="text-sm text-gray-600 flex items-center">
-              <Calendar className="text-gray-400 mr-1 h-4 w-4" /> 
-              <span className="font-medium">{formatDateTime(interview.slotTime)}</span>
-            </p>
-            {!isPast && (
-              <p className="text-sm mt-1 flex items-center">
-                <Clock className="text-gray-400 mr-1 h-4 w-4" /> 
-                <span className={`font-medium ${timeStatus.isStartingSoon ? 'text-primary' : 'text-gray-600'}`}>
-                  {timeStatus.message}
-                </span>
+          
+          {/* Partner */}
+          <div className="flex items-start">
+            <User className="h-4 w-4 mr-2 mt-0.5 text-gray-500" />
+            <div>
+              <p className="text-sm font-medium">
+                {interview.intervieweeId ? (
+                  interview.interviewerId === interview.intervieweeId ? 
+                    <span>You are interviewing</span> : 
+                    <span>You are being interviewed</span>
+                ) : <span>Open slot</span>}
               </p>
-            )}
+              {partner && (
+                <p className="text-sm text-gray-600">Partner: {partner.name}</p>
+              )}
+            </div>
           </div>
+          
+          {/* Meeting Link */}
+          {interview.meetingLink && !isPast && (
+            <div className="flex items-start">
+              <Video className="h-4 w-4 mr-2 mt-0.5 text-gray-500" />
+              <div>
+                <p className="text-sm font-medium">Video Meeting</p>
+                <p className="text-xs text-gray-500 truncate max-w-xs">
+                  {interview.meetingLink.length > 40 
+                    ? interview.meetingLink.substring(0, 40) + "..." 
+                    : interview.meetingLink}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
-        
-        {!isPast ? (
-          <div className="flex space-x-3">
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="outline">
-                  Cancel
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Cancel Interview?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Are you sure you want to cancel this interview? This action cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Keep Interview</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => cancelInterviewMutation.mutate()}
-                    className="bg-red-600 hover:bg-red-700"
-                  >
-                    {cancelInterviewMutation.isPending ? "Cancelling..." : "Yes, Cancel"}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-            
-            <Button 
-              onClick={onJoin}
-              disabled={!timeStatus.isStartingSoon}
-              className={timeStatus.isStartingSoon ? "bg-primary hover:bg-primary/90" : "bg-gray-400 hover:bg-gray-500"}
-            >
-              <Video className="mr-2 h-4 w-4" /> Join Room
-            </Button>
-          </div>
+      </CardContent>
+      
+      <CardFooter className="bg-gray-50 px-4 py-3 border-t border-gray-100 flex justify-between">
+        {isPast ? (
+          <div className="text-sm text-gray-500">Past interview</div>
+        ) : interview.status === "Cancelled" ? (
+          <div className="text-sm text-gray-500">Cancelled</div>
         ) : (
-          <div>
-            <Badge variant="outline">
-              {interview.status === "Completed" ? "Completed" : "Cancelled"}
-            </Badge>
-          </div>
+          <>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleCancel}
+              disabled={cancelInterviewMutation.isPending}
+            >
+              {cancelInterviewMutation.isPending ? "Cancelling..." : "Cancel"}
+            </Button>
+            
+            {isJoinable && onJoin && (
+              <Button 
+                size="sm" 
+                onClick={onJoin}
+                className="flex items-center"
+              >
+                <ExternalLink className="mr-1 h-3 w-3" />
+                Join Interview
+              </Button>
+            )}
+          </>
         )}
-      </div>
-    </div>
+      </CardFooter>
+    </Card>
   );
 }
