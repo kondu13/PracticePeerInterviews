@@ -92,13 +92,13 @@ export function Sidebar() {
         <div className="flex items-center">
           <Avatar className="h-8 w-8">
             {user.avatarUrl ? (
-              <AvatarImage src={user.avatarUrl} alt={user.name} />
+              <AvatarImage src={user.avatarUrl} alt={user.fullName} />
             ) : (
-              <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
+              <AvatarFallback>{getInitials(user.fullName)}</AvatarFallback>
             )}
           </Avatar>
           <div className="ml-3">
-            <p className="text-sm font-medium text-gray-700">{user.name}</p>
+            <p className="text-sm font-medium text-gray-700">{user.fullName}</p>
             <p className="text-xs text-gray-500">{user.email}</p>
           </div>
         </div>

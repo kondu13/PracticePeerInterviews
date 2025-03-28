@@ -1,16 +1,9 @@
 import { createServer } from 'http';
-import express from 'express';
-import passport from 'passport';
-import { Strategy as LocalStrategy } from 'passport-local';
-import session from 'express-session';
-import connectMongo from 'connect-mongo';
 import { log } from './vite.js';
 import connectDB from './config/db.js';
-import User from './models/User.js';
-import { comparePasswords } from './controllers/userController.js';
+import { setupAuth } from './auth.js';
 
 // Import controllers
-import * as authController from './controllers/authController.js';
 import * as userController from './controllers/userController.js';
 import * as matchRequestController from './controllers/matchRequestController.js';
 import * as interviewSlotController from './controllers/interviewSlotController.js';
@@ -23,76 +16,14 @@ const isAuthenticated = (req, res, next) => {
   return res.status(401).json({ message: 'Not authenticated' });
 };
 
-// Connect MongoDB Session Store
-const MongoStore = connectMongo(session);
-
 export async function registerRoutes(app) {
   // Connect to MongoDB
-  const conn = await connectDB();
+  await connectDB();
   
-  // Session configuration
-  const sessionSettings = {
-    secret: process.env.SESSION_SECRET || 'interview-platform-secret',
-    resave: false,
-    saveUninitialized: false,
-    store: new MongoStore({ 
-      mongoUrl: conn.connection.client.options.credentials.credentials.source,
-      collectionName: 'sessions'
-    }),
-    cookie: { 
-      maxAge: 1000 * 60 * 60 * 24, // 1 day
-      httpOnly: true,
-      sameSite: 'lax'
-    }
-  };
-
-  // In production, set secure cookie
-  if (process.env.NODE_ENV === 'production') {
-    app.set('trust proxy', 1); // trust first proxy
-    sessionSettings.cookie.secure = true; // serve secure cookies
-  }
-
-  app.use(session(sessionSettings));
-  app.use(passport.initialize());
-  app.use(passport.session());
+  // Setup authentication
+  setupAuth(app);
   
-  // Passport local strategy
-  passport.use(new LocalStrategy(async (username, password, done) => {
-    try {
-      const user = await User.findOne({ username });
-      if (!user) {
-        return done(null, false, { message: 'Incorrect username or password.' });
-      }
-      
-      const isMatch = await comparePasswords(password, user.password);
-      if (!isMatch) {
-        return done(null, false, { message: 'Incorrect username or password.' });
-      }
-      
-      return done(null, user);
-    } catch (error) {
-      return done(error);
-    }
-  }));
-  
-  passport.serializeUser((user, done) => {
-    done(null, user._id);
-  });
-  
-  passport.deserializeUser(async (id, done) => {
-    try {
-      const user = await User.findById(id).select('-password');
-      done(null, user);
-    } catch (error) {
-      done(error);
-    }
-  });
-  
-  // Authentication Routes
-  app.post('/api/register', authController.register);
-  app.post('/api/login', passport.authenticate('local'), authController.login);
-  app.post('/api/logout', authController.logout);
-  app.get('/api/user', authController.getCurrentUser);
+  // Authentication Routes are set up in setupAuth
   
   // User Routes
   app.get('/api/users', isAuthenticated, userController.getUsers);

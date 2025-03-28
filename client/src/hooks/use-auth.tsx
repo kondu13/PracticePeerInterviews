@@ -6,9 +6,10 @@ import {
 } from "@tanstack/react-query";
 // Define types based on our JavaScript schema
 type SelectUser = {
-  id: string;
+  _id?: string;  // MongoDB uses _id
+  id?: number;   // Support for both id formats
   username: string;
-  name: string;
+  fullName: string;  // Changed from name to fullName to match backend
   email: string;
   experienceLevel: string;
   skills: string[];
@@ -65,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       queryClient.setQueryData(["/api/user"], user);
       toast({
         title: "Login successful",
-        description: `Welcome back, ${user.name}!`,
+        description: `Welcome back, ${user.fullName}!`,
       });
     },
     onError: (error: Error) => {
@@ -86,7 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       queryClient.setQueryData(["/api/user"], user);
       toast({
         title: "Registration successful",
-        description: `Welcome to MockMate, ${user.name}!`,
+        description: `Welcome to MockMate, ${user.fullName}!`,
       });
     },
     onError: (error: Error) => {
