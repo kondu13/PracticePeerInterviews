@@ -1,2 +1,13 @@
-[Start application]
-command = "node index.js"
+[nix]
+channel = "stable-23_11"
+
+[unitTest]
+language = "nodejs"
+
+[server]
+command = "node simplified-server.js"
+persistent = true
+
+[client]
+command = "node start-client.js"
+persistent = true

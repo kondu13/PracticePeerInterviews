@@ -1,245 +1,185 @@
 import { storage } from '../storage.js';
 
-// Helper to enrich match requests with user data
-const enrichMatchRequests = async (requests) => {
-  const enrichedRequests = [];
-  
-  for (const request of requests) {
-    // Get requester info
-    const requester = await storage.getUser(request.requesterId);
-    
-    // Get matched peer info if exists
-    let matchedPeer = null;
-    if (request.matchedPeerId) {
-      matchedPeer = await storage.getUser(request.matchedPeerId);
-    }
-    
-    // Add user objects to the request
-    enrichedRequests.push({
-      ...request,
-      requester: requester ? { ...requester, password: undefined } : null,
-      matchedPeer: matchedPeer ? { ...matchedPeer, password: undefined } : null
-    });
-  }
-  
-  return enrichedRequests;
-};
-
-// @desc    Create a new match request
-// @route   POST /api/match-requests
-// @access  Private
 export const createMatchRequest = async (req, res) => {
   try {
-    const { targetExperienceLevel, targetSkills, preferredTimes, notes } = req.body;
+    const { matchedPeerId, message, status } = req.body;
     
-    // Create new match request
+    // Set requester as the authenticated user
+    const requesterId = req.user.id;
+    
+    // Validate required fields
+    if (!matchedPeerId) {
+      return res.status(400).json({ message: 'Matched peer ID is required' });
+    }
+    
+    // Create the match request
     const matchRequest = await storage.createMatchRequest({
-      requesterId: req.user.id,
-      status: 'pending',
-      targetExperienceLevel,
-      targetSkills: targetSkills || [],
-      preferredTimes: preferredTimes || [],
-      notes,
-      matchedPeerId: null
+      requesterId,
+      matchedPeerId,
+      message: message || '',
+      status: status || 'Pending'
     });
     
-    // Get requester info to include in response
-    const requester = await storage.getUser(matchRequest.requesterId);
-    
-    res.status(201).json({
-      ...matchRequest,
-      requester: { ...requester, password: undefined }
-    });
+    res.status(201).json(matchRequest);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Error creating match request', error: error.message });
   }
 };
 
-// @desc    Get match request by ID
-// @route   GET /api/match-requests/:id
-// @access  Private
 export const getMatchRequestById = async (req, res) => {
   try {
-    const requestId = parseInt(req.params.id);
-    const matchRequest = await storage.getMatchRequestById(requestId);
+    const matchRequest = await storage.getMatchRequestById(parseInt(req.params.id));
     
     if (!matchRequest) {
       return res.status(404).json({ message: 'Match request not found' });
     }
     
-    // Check if user is the requester or the matched peer
-    const isRequester = matchRequest.requesterId === req.user.id;
-    const isMatchedPeer = matchRequest.matchedPeerId && matchRequest.matchedPeerId === req.user.id;
-    
-    if (!isRequester && !isMatchedPeer) {
-      return res.status(401).json({ message: 'Not authorized to view this match request' });
+    // Check if the user is either the requester or the matched peer
+    if (matchRequest.requesterId !== req.user.id && matchRequest.matchedPeerId !== req.user.id) {
+      return res.status(403).json({ message: 'Not authorized to view this match request' });
     }
     
-    // Get requester and matched peer info
-    const requester = await storage.getUser(matchRequest.requesterId);
-    let matchedPeer = null;
-    if (matchRequest.matchedPeerId) {
-      matchedPeer = await storage.getUser(matchRequest.matchedPeerId);
-    }
-    
-    res.json({
-      ...matchRequest,
-      requester: { ...requester, password: undefined },
-      matchedPeer: matchedPeer ? { ...matchedPeer, password: undefined } : null
-    });
+    res.status(200).json(matchRequest);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Error fetching match request', error: error.message });
   }
 };
 
-// @desc    Get incoming match requests for user
-// @route   GET /api/match-requests/incoming
-// @access  Private
 export const getIncomingMatchRequests = async (req, res) => {
   try {
-    // Get the current user
-    const user = await storage.getUser(req.user.id);
+    const userId = req.user.id;
+    const requests = await storage.getIncomingMatchRequests(userId);
     
-    // Get all match requests
-    const allRequests = await storage.getIncomingMatchRequests(req.user.id);
+    // Get requester details for each request
+    const requestsWithUsers = await Promise.all(requests.map(async (request) => {
+      const requester = await storage.getUser(request.requesterId);
+      if (requester) {
+        const { password, ...safeRequester } = requester;
+        return { ...request, requester: safeRequester };
+      }
+      return request;
+    }));
     
-    // Filter requests that match user's experience level and skills
-    const incomingRequests = allRequests.filter(request => {
-      const matchesExperience = 
-        request.targetExperienceLevel === user.experienceLevel || 
-        request.targetExperienceLevel === 'any';
-      
-      const matchesSkills = 
-        request.targetSkills.length === 0 || // No skills specified means any skill is acceptable
-        request.targetSkills.some(skill => user.skills.includes(skill));
-        
-      return request.status === 'pending' && matchesExperience && matchesSkills;
-    });
-    
-    // Enrich with user data
-    const enrichedRequests = await enrichMatchRequests(incomingRequests);
-    
-    res.json(enrichedRequests);
+    res.status(200).json(requestsWithUsers);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Error fetching incoming match requests', error: error.message });
   }
 };
 
-// @desc    Get outgoing match requests from user
-// @route   GET /api/match-requests/outgoing
-// @access  Private
 export const getOutgoingMatchRequests = async (req, res) => {
   try {
-    const outgoingRequests = await storage.getOutgoingMatchRequests(req.user.id);
+    const userId = req.user.id;
+    const requests = await storage.getOutgoingMatchRequests(userId);
     
-    // Enrich with user data
-    const enrichedRequests = await enrichMatchRequests(outgoingRequests);
+    // Get matched peer details for each request
+    const requestsWithUsers = await Promise.all(requests.map(async (request) => {
+      const matchedPeer = await storage.getUser(request.matchedPeerId);
+      if (matchedPeer) {
+        const { password, ...safeMatchedPeer } = matchedPeer;
+        return { ...request, matchedPeer: safeMatchedPeer };
+      }
+      return request;
+    }));
     
-    res.json(enrichedRequests);
+    res.status(200).json(requestsWithUsers);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Error fetching outgoing match requests', error: error.message });
   }
 };
 
-// @desc    Get all match requests
-// @route   GET /api/match-requests
-// @access  Private (admin only in a real app)
 export const getAllMatchRequests = async (req, res) => {
   try {
-    // In a real app, this would be restricted to admins
-    // For this prototype, we'll return all match requests for the logged-in user
-    const { incoming, outgoing } = await getMatchRequests(req.user.id);
+    const userId = req.user.id;
     
-    res.json({
-      incoming,
-      outgoing
-    });
+    // Get both incoming and outgoing requests
+    const incomingRequests = await storage.getIncomingMatchRequests(userId);
+    const outgoingRequests = await storage.getOutgoingMatchRequests(userId);
+    
+    // Get user details for each request
+    const incomingWithUsers = await Promise.all(incomingRequests.map(async (request) => {
+      const requester = await storage.getUser(request.requesterId);
+      if (requester) {
+        const { password, ...safeRequester } = requester;
+        return { ...request, requester: safeRequester, type: 'incoming' };
+      }
+      return { ...request, type: 'incoming' };
+    }));
+    
+    const outgoingWithUsers = await Promise.all(outgoingRequests.map(async (request) => {
+      const matchedPeer = await storage.getUser(request.matchedPeerId);
+      if (matchedPeer) {
+        const { password, ...safeMatchedPeer } = matchedPeer;
+        return { ...request, matchedPeer: safeMatchedPeer, type: 'outgoing' };
+      }
+      return { ...request, type: 'outgoing' };
+    }));
+    
+    // Combine and sort by creation date (newest first)
+    const allRequests = [...incomingWithUsers, ...outgoingWithUsers].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+    
+    res.status(200).json(allRequests);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Error fetching all match requests', error: error.message });
   }
 };
 
-// Helper function to get both incoming and outgoing requests
+// Helper function used by the socket implementation
 export const getMatchRequests = async (userId) => {
-  // Get user details
-  const user = await storage.getUser(userId);
-  
-  // Get all requests
-  const allIncomingRequests = await storage.getIncomingMatchRequests(userId);
-  
-  // Filter incoming requests that match user's experience and skills
-  const incomingRequests = allIncomingRequests.filter(request => {
-    const matchesExperience = 
-      request.targetExperienceLevel === user.experienceLevel || 
-      request.targetExperienceLevel === 'any';
+  try {
+    const incomingRequests = await storage.getIncomingMatchRequests(userId);
+    const outgoingRequests = await storage.getOutgoingMatchRequests(userId);
     
-    const matchesSkills = 
-      request.targetSkills.length === 0 || // No skills specified means any skill is acceptable
-      request.targetSkills.some(skill => user.skills.includes(skill));
-      
-    return request.status === 'pending' && matchesExperience && matchesSkills;
-  });
-  
-  // Get outgoing requests
-  const outgoingRequests = await storage.getOutgoingMatchRequests(userId);
-  
-  // Enrich both with user data
-  const enrichedIncoming = await enrichMatchRequests(incomingRequests);
-  const enrichedOutgoing = await enrichMatchRequests(outgoingRequests);
-  
-  return { 
-    incoming: enrichedIncoming, 
-    outgoing: enrichedOutgoing 
-  };
+    return {
+      incoming: incomingRequests,
+      outgoing: outgoingRequests
+    };
+  } catch (error) {
+    console.error('Error fetching match requests for socket:', error);
+    return { incoming: [], outgoing: [] };
+  }
 };
 
-// @desc    Update match request status
-// @route   PUT /api/match-requests/:id/status
-// @access  Private
 export const updateMatchRequestStatus = async (req, res) => {
   try {
     const { status } = req.body;
     const requestId = parseInt(req.params.id);
     
-    if (!['pending', 'accepted', 'rejected', 'canceled'].includes(status)) {
-      return res.status(400).json({ message: 'Invalid status' });
+    // Validate the status
+    if (!status || !['Pending', 'Accepted', 'Rejected', 'Cancelled'].includes(status)) {
+      return res.status(400).json({ message: 'Invalid status. Must be Pending, Accepted, Rejected, or Cancelled' });
     }
     
-    let matchRequest = await storage.getMatchRequestById(requestId);
+    // Get the request
+    const request = await storage.getMatchRequestById(requestId);
     
-    if (!matchRequest) {
+    if (!request) {
       return res.status(404).json({ message: 'Match request not found' });
     }
     
-    // If accepting a request, update both status and matchedPeerId
-    if (status === 'accepted') {
-      // Create updated request object with matchedPeerId
-      matchRequest = {
-        ...matchRequest,
-        status,
-        matchedPeerId: req.user.id
-      };
-      
-      // Update in storage
-      await storage.updateMatchRequestStatus(requestId, status, req.user.id);
-    } else {
-      // Just update the status
-      matchRequest = await storage.updateMatchRequestStatus(requestId, status);
+    // Check authorization based on the status change
+    if (status === 'Accepted' || status === 'Rejected') {
+      // Only the matched peer can accept or reject requests
+      if (request.matchedPeerId !== req.user.id) {
+        return res.status(403).json({ message: 'Not authorized to accept/reject this match request' });
+      }
+    } else if (status === 'Cancelled') {
+      // Only the requester can cancel their own requests
+      if (request.requesterId !== req.user.id) {
+        return res.status(403).json({ message: 'Not authorized to cancel this match request' });
+      }
     }
     
-    // Get requester and matched peer info
-    const requester = await storage.getUser(matchRequest.requesterId);
-    let matchedPeer = null;
-    if (matchRequest.matchedPeerId) {
-      matchedPeer = await storage.getUser(matchRequest.matchedPeerId);
+    // Update the request status
+    const updatedRequest = await storage.updateMatchRequestStatus(requestId, status);
+    
+    if (!updatedRequest) {
+      return res.status(500).json({ message: 'Failed to update match request status' });
     }
     
-    res.json({
-      ...matchRequest,
-      requester: { ...requester, password: undefined },
-      matchedPeer: matchedPeer ? { ...matchedPeer, password: undefined } : null
-    });
+    res.status(200).json(updatedRequest);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Error updating match request status', error: error.message });
   }
 };

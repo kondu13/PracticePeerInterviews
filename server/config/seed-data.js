@@ -1,8 +1,6 @@
-// Seed data configuration
+import { storage } from '../storage.js';
 import { scrypt, randomBytes } from 'crypto';
 import { promisify } from 'util';
-import { log } from '../vite.js';
-import { storage } from '../storage.js';
 
 const scryptAsync = promisify(scrypt);
 
@@ -12,100 +10,153 @@ async function hashPassword(password) {
   return `${buf.toString('hex')}.${salt}`;
 }
 
-// Test users data
-const testUsers = [
-  {
-    username: 'alice_dev',
-    password: 'password123',
-    fullName: 'Alice Developer',
-    email: 'alice@example.com',
-    experienceLevel: 'beginner',
-    skills: ['JavaScript', 'React', 'HTML', 'CSS'],
-    targetRole: 'Frontend Developer',
-    bio: 'I am a beginner developer looking to improve my frontend skills.'
-  },
-  {
-    username: 'bob_coder',
-    password: 'password123',
-    fullName: 'Bob Coder',
-    email: 'bob@example.com',
-    experienceLevel: 'intermediate',
-    skills: ['Python', 'Django', 'API Design', 'SQL'],
-    targetRole: 'Backend Developer',
-    bio: 'Backend developer with 2 years of experience in Python and Django.'
-  },
-  {
-    username: 'charlie_tech',
-    password: 'password123',
-    fullName: 'Charlie Tech',
-    email: 'charlie@example.com',
-    experienceLevel: 'advanced',
-    skills: ['System Design', 'Java', 'Microservices', 'AWS'],
-    targetRole: 'Senior Software Engineer',
-    bio: 'Experienced engineer with 7+ years in distributed systems and cloud architecture.'
-  },
-  {
-    username: 'dana_coding',
-    password: 'password123',
-    fullName: 'Dana Coding',
-    email: 'dana@example.com',
-    experienceLevel: 'beginner',
-    skills: ['JavaScript', 'Node.js', 'Express'],
-    targetRole: 'Full Stack Developer',
-    bio: 'Learning full stack development with a focus on Node.js and React.'
-  },
-  {
-    username: 'eli_dev',
-    password: 'password123',
-    fullName: 'Eli Developer',
-    email: 'eli@example.com',
-    experienceLevel: 'intermediate',
-    skills: ['React', 'TypeScript', 'CSS', 'UI/UX'],
-    targetRole: 'Frontend Engineer',
-    bio: 'Frontend specialist with a passion for beautiful and accessible user interfaces.'
-  },
-];
-
 export async function seedTestUsers() {
   try {
-    // Check if users already exist
+    // Check if we already have users
     const existingUsers = await storage.getUsers();
     if (existingUsers.length > 0) {
-      log(`Storage already has ${existingUsers.length} users, skipping seed`, 'seed');
+      console.log('Database already has users, skipping seed');
       return;
     }
+
+    // Test users data
+    const users = [
+      {
+        username: 'alice',
+        password: await hashPassword('alice123'),
+        fullName: 'Alice Johnson',
+        email: 'alice@example.com',
+        skills: ['JavaScript', 'React', 'Node.js'],
+        experienceLevel: 'Junior',
+        targetRole: 'Frontend Developer',
+        bio: 'Junior developer with 1 year of experience in web development.'
+      },
+      {
+        username: 'bob',
+        password: await hashPassword('bob123'),
+        fullName: 'Bob Smith',
+        email: 'bob@example.com',
+        skills: ['Python', 'Django', 'Flask'],
+        experienceLevel: 'Mid-level',
+        targetRole: 'Backend Developer',
+        bio: 'Mid-level developer with 3 years of experience in backend technologies.'
+      },
+      {
+        username: 'charlie',
+        password: await hashPassword('charlie123'),
+        fullName: 'Charlie Davis',
+        email: 'charlie@example.com',
+        skills: ['Java', 'Spring', 'Hibernate'],
+        experienceLevel: 'Senior',
+        targetRole: 'Software Architect',
+        bio: 'Senior developer with 7 years of experience in enterprise applications.'
+      },
+      {
+        username: 'dana',
+        password: await hashPassword('dana123'),
+        fullName: 'Dana Martinez',
+        email: 'dana@example.com',
+        skills: ['C#', '.NET', 'SQL'],
+        experienceLevel: 'Mid-level',
+        targetRole: 'Full Stack Developer',
+        bio: 'Mid-level developer with 4 years of experience in full stack development.'
+      },
+      {
+        username: 'eli',
+        password: await hashPassword('eli123'),
+        fullName: 'Eli Wong',
+        email: 'eli@example.com',
+        skills: ['Ruby', 'Rails', 'PostgreSQL'],
+        experienceLevel: 'Senior',
+        targetRole: 'Lead Developer',
+        bio: 'Senior developer with 6 years of experience leading development teams.'
+      }
+    ];
+
+    // Create users
+    for (const user of users) {
+      await storage.createUser(user);
+    }
+
+    console.log('Test users seeded successfully');
+
+    // Create some test interview slots
+    const now = new Date();
     
-    log('Seeding test users to in-memory storage...', 'seed');
-    
-    // Create test users
-    const createdUsers = [];
-    for (const userData of testUsers) {
-      try {
-        // Check if user already exists
-        const existingUser = await storage.getUserByUsername(userData.username);
-        if (existingUser) {
-          log(`User ${userData.username} already exists, skipping`, 'seed');
-          continue;
-        }
-        
-        // Hash the password
-        const hashedPassword = await hashPassword(userData.password);
-        
-        // Create the user with the hashed password
-        const user = await storage.createUser({
-          ...userData,
-          password: hashedPassword
+    // Create slots for the next 7 days
+    for (let i = 1; i <= 7; i++) {
+      const slotDate = new Date(now);
+      slotDate.setDate(now.getDate() + i);
+      
+      // Morning slot
+      slotDate.setHours(10, 0, 0, 0);
+      
+      // Create a slot for each user
+      for (let userId = 1; userId <= 5; userId++) {
+        await storage.createInterviewSlot({
+          interviewerId: userId,
+          slotTime: new Date(slotDate),
+          duration: 60,
+          topic: 'General Technical Interview',
+          notes: 'Practice for coding interviews.',
+          status: 'Available'
         });
         
-        createdUsers.push(user);
-        log(`Created test user: ${user.fullName} (${user.username})`, 'seed');
-      } catch (error) {
-        log(`Error creating user ${userData.username}: ${error.message}`, 'error');
+        // Add an afternoon slot too
+        const afternoonDate = new Date(slotDate);
+        afternoonDate.setHours(14, 0, 0, 0);
+        
+        await storage.createInterviewSlot({
+          interviewerId: userId,
+          slotTime: afternoonDate,
+          duration: 60,
+          topic: 'Behavioral Interview',
+          notes: 'Practice for behavioral questions.',
+          status: 'Available'
+        });
       }
     }
+
+    console.log('Test interview slots seeded successfully');
+
+    // Create some test match requests
+    const matchRequests = [
+      { requesterId: 1, matchedPeerId: 2, message: 'Would love to practice React interviews with you!', status: 'Pending' },
+      { requesterId: 3, matchedPeerId: 5, message: 'Looking for Java interview practice partner.', status: 'Pending' },
+      { requesterId: 2, matchedPeerId: 4, message: 'Can we practice Django interviews?', status: 'Accepted' },
+      { requesterId: 5, matchedPeerId: 1, message: 'Need Rails interview practice.', status: 'Pending' },
+      { requesterId: 4, matchedPeerId: 3, message: 'Looking for .NET mock interview partner.', status: 'Rejected' }
+    ];
+
+    for (const request of matchRequests) {
+      await storage.createMatchRequest(request);
+    }
+
+    console.log('Test match requests seeded successfully');
+
+    // Book some interview slots
+    // Bob books Alice's morning slot
+    const aliceSlot = (await storage.getAvailableSlots()).find(
+      slot => slot.interviewerId === 1 && new Date(slot.slotTime).getHours() === 10
+    );
     
-    log(`Successfully created ${createdUsers.length} test users`, 'seed');
+    if (aliceSlot) {
+      await storage.bookInterviewSlot(aliceSlot.id, 2); // Bob books Alice's slot
+    }
+    
+    // Charlie books Dana's afternoon slot
+    const danaSlot = (await storage.getAvailableSlots()).find(
+      slot => slot.interviewerId === 4 && new Date(slot.slotTime).getHours() === 14
+    );
+    
+    if (danaSlot) {
+      await storage.bookInterviewSlot(danaSlot.id, 3); // Charlie books Dana's slot
+    }
+
+    console.log('Test bookings completed successfully');
+
   } catch (error) {
-    log(`Error seeding database: ${error.message}`, 'error');
+    console.error('Error seeding test data:', error);
+    throw error;
   }
 }

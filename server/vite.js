@@ -69,10 +69,18 @@ export async function setupVite(app, server) {
 
       // always reload the index.html file from disk incase it changes
       let template = await fs.promises.readFile(clientTemplate, "utf-8");
-      template = template.replace(
-        `src="/src/main.tsx"`,
-        `src="/src/main.tsx?v=${nanoid()}"`,
-      );
+      // Check for main.js first, then try main.tsx as fallback
+      if (template.includes(`src="/src/main.tsx"`)) {
+        template = template.replace(
+          `src="/src/main.tsx"`,
+          `src="/src/main.js?v=${nanoid()}"`,
+        );
+      } else if (template.includes(`src="/src/main.js"`)) {
+        template = template.replace(
+          `src="/src/main.js"`,
+          `src="/src/main.js?v=${nanoid()}"`,
+        );
+      }
       const page = await vite.transformIndexHtml(url, template);
       res.status(200).set({ "Content-Type": "text/html" }).end(page);
     } catch (e) {

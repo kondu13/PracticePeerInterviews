@@ -30,15 +30,13 @@ export function setupAuth(app) {
     cookie: { 
       maxAge: 1000 * 60 * 60 * 24, // 1 day
       httpOnly: true,
-      sameSite: 'lax'
+      sameSite: 'none',
+      secure: false
     }
   };
 
-  // In production, set secure cookie
-  if (process.env.NODE_ENV === 'production') {
-    app.set('trust proxy', 1); // trust first proxy
-    sessionSettings.cookie.secure = true; // serve secure cookies
-  }
+  // In development, allow cross-origin cookies
+  app.set('trust proxy', 1); // trust first proxy
 
   app.use(session(sessionSettings));
   app.use(passport.initialize());

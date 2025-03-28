@@ -1,287 +1,375 @@
 import { storage } from '../storage.js';
 
-// Helper to enrich interview slots with user data
-const enrichInterviewSlots = async (slots) => {
-  const enrichedSlots = [];
-  
-  for (const slot of slots) {
-    // Get interviewer info
-    const interviewer = await storage.getUser(slot.interviewerId);
-    
-    // Get interviewee info if exists
-    let interviewee = null;
-    if (slot.intervieweeId) {
-      interviewee = await storage.getUser(slot.intervieweeId);
-    }
-    
-    // Add user objects to the slot
-    enrichedSlots.push({
-      ...slot,
-      interviewer: interviewer ? { ...interviewer, password: undefined } : null,
-      interviewee: interviewee ? { ...interviewee, password: undefined } : null
-    });
-  }
-  
-  return enrichedSlots;
-};
-
-// @desc    Create a new interview slot
-// @route   POST /api/interview-slots
-// @access  Private
 export const createInterviewSlot = async (req, res) => {
   try {
-    const { startTime, endTime, meetingLink, meetingType, notes } = req.body;
+    const { slotTime, duration, topic, notes } = req.body;
     
-    // Validate time range
-    const start = new Date(startTime);
-    const end = new Date(endTime);
+    // Set interviewer as the authenticated user
+    const interviewerId = req.user.id;
     
-    if (start >= end) {
-      return res.status(400).json({ message: 'End time must be after start time' });
+    // Validate required fields
+    if (!slotTime) {
+      return res.status(400).json({ message: 'Slot time is required' });
     }
     
-    // Create new interview slot
+    if (!duration) {
+      return res.status(400).json({ message: 'Duration is required' });
+    }
+    
+    // Create the interview slot
     const interviewSlot = await storage.createInterviewSlot({
-      interviewerId: req.user.id,
-      startTime: start,
-      endTime: end,
-      status: "Available",
-      meetingLink,
-      meetingType: meetingType || 'zoom',
-      notes
+      interviewerId,
+      slotTime: new Date(slotTime),
+      duration,
+      topic: topic || 'General Interview',
+      notes: notes || '',
+      status: 'Available',
+      intervieweeId: null,
+      meetingLink: null
     });
     
-    // Get interviewer info to include in response
-    const interviewer = await storage.getUser(interviewSlot.interviewerId);
-    
-    res.status(201).json({
-      ...interviewSlot,
-      interviewer: { ...interviewer, password: undefined }
-    });
+    res.status(201).json(interviewSlot);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Error creating interview slot', error: error.message });
   }
 };
 
-// @desc    Get interview slot by ID
-// @route   GET /api/interview-slots/:id
-// @access  Private
 export const getInterviewSlotById = async (req, res) => {
   try {
-    const slotId = parseInt(req.params.id);
-    const interviewSlot = await storage.getInterviewSlotById(slotId);
+    const interviewSlot = await storage.getInterviewSlotById(parseInt(req.params.id));
     
     if (!interviewSlot) {
       return res.status(404).json({ message: 'Interview slot not found' });
     }
     
-    // Get user info
+    // Get interviewer and interviewee details
     const interviewer = await storage.getUser(interviewSlot.interviewerId);
     let interviewee = null;
     if (interviewSlot.intervieweeId) {
       interviewee = await storage.getUser(interviewSlot.intervieweeId);
     }
     
-    res.json({
+    // Filter out sensitive information
+    let safeInterviewer = null;
+    let safeInterviewee = null;
+    
+    if (interviewer) {
+      const { password, ...safePeer } = interviewer;
+      safeInterviewer = safePeer;
+    }
+    
+    if (interviewee) {
+      const { password, ...safePeer } = interviewee;
+      safeInterviewee = safePeer;
+    }
+    
+    // Return slot with user details
+    const slotWithDetails = {
       ...interviewSlot,
-      interviewer: { ...interviewer, password: undefined },
-      interviewee: interviewee ? { ...interviewee, password: undefined } : null
-    });
+      interviewer: safeInterviewer,
+      interviewee: safeInterviewee
+    };
+    
+    res.status(200).json(slotWithDetails);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Error fetching interview slot', error: error.message });
   }
 };
 
-// @desc    Get all available interview slots
-// @route   GET /api/interview-slots/available
-// @access  Private
 export const getAvailableSlots = async (req, res) => {
   try {
-    const now = new Date();
+    // Get current user ID to filter out their own slots
+    const userId = req.user.id;
     
     // Get all available slots
-    const availableSlots = await storage.getAvailableSlots();
+    const slots = await storage.getAvailableSlots();
     
-    // Filter to only include future slots
-    const futureSlots = availableSlots.filter(slot => 
-      new Date(slot.startTime) > now
-    ).sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+    // Filter out slots created by the current user
+    const otherUserSlots = slots.filter(slot => slot.interviewerId !== userId);
     
-    // Enrich with user data
-    const enrichedSlots = await enrichInterviewSlots(futureSlots);
+    // Get interviewer details for each slot
+    const slotsWithInterviewers = await Promise.all(otherUserSlots.map(async (slot) => {
+      const interviewer = await storage.getUser(slot.interviewerId);
+      if (interviewer) {
+        const { password, ...safeInterviewer } = interviewer;
+        return { ...slot, interviewer: safeInterviewer };
+      }
+      return slot;
+    }));
     
-    res.json(enrichedSlots);
+    // Sort by date (soonest first)
+    const sortedSlots = slotsWithInterviewers.sort(
+      (a, b) => new Date(a.slotTime).getTime() - new Date(b.slotTime).getTime()
+    );
+    
+    res.status(200).json(sortedSlots);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Error fetching available slots', error: error.message });
   }
 };
 
-// @desc    Get user's upcoming interviews
-// @route   GET /api/interview-slots/upcoming
-// @access  Private
 export const getUserUpcomingInterviews = async (req, res) => {
   try {
-    // Get upcoming interviews
-    const upcomingInterviews = await storage.getUserUpcomingInterviews(req.user.id);
+    const userId = req.user.id;
+    const slots = await storage.getUserUpcomingInterviews(userId);
     
-    // Enrich with user data
-    const enrichedInterviews = await enrichInterviewSlots(upcomingInterviews);
+    // Get user details for each slot
+    const slotsWithUsers = await Promise.all(slots.map(async (slot) => {
+      const interviewer = await storage.getUser(slot.interviewerId);
+      let interviewee = null;
+      
+      if (slot.intervieweeId) {
+        interviewee = await storage.getUser(slot.intervieweeId);
+      }
+      
+      // Clean user objects
+      let safeInterviewer = null;
+      let safeInterviewee = null;
+      
+      if (interviewer) {
+        const { password, ...safe } = interviewer;
+        safeInterviewer = safe;
+      }
+      
+      if (interviewee) {
+        const { password, ...safe } = interviewee;
+        safeInterviewee = safe;
+      }
+      
+      // Determine the role and partner
+      let role, partner;
+      
+      if (slot.interviewerId === userId) {
+        role = 'interviewer';
+        partner = safeInterviewee;
+      } else {
+        role = 'interviewee';
+        partner = safeInterviewer;
+      }
+      
+      return {
+        ...slot,
+        interviewer: safeInterviewer,
+        interviewee: safeInterviewee,
+        role,
+        partner
+      };
+    }));
     
-    res.json(enrichedInterviews);
+    res.status(200).json(slotsWithUsers);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Error fetching upcoming interviews', error: error.message });
   }
 };
 
-// @desc    Get user's past interviews
-// @route   GET /api/interview-slots/past
-// @access  Private
 export const getUserPastInterviews = async (req, res) => {
   try {
-    // Get past interviews
-    const pastInterviews = await storage.getUserPastInterviews(req.user.id);
+    const userId = req.user.id;
+    const slots = await storage.getUserPastInterviews(userId);
     
-    // Enrich with user data
-    const enrichedInterviews = await enrichInterviewSlots(pastInterviews);
+    // Get user details for each slot
+    const slotsWithUsers = await Promise.all(slots.map(async (slot) => {
+      const interviewer = await storage.getUser(slot.interviewerId);
+      let interviewee = null;
+      
+      if (slot.intervieweeId) {
+        interviewee = await storage.getUser(slot.intervieweeId);
+      }
+      
+      // Clean user objects
+      let safeInterviewer = null;
+      let safeInterviewee = null;
+      
+      if (interviewer) {
+        const { password, ...safe } = interviewer;
+        safeInterviewer = safe;
+      }
+      
+      if (interviewee) {
+        const { password, ...safe } = interviewee;
+        safeInterviewee = safe;
+      }
+      
+      // Determine the role and partner
+      let role, partner;
+      
+      if (slot.interviewerId === userId) {
+        role = 'interviewer';
+        partner = safeInterviewee;
+      } else {
+        role = 'interviewee';
+        partner = safeInterviewer;
+      }
+      
+      return {
+        ...slot,
+        interviewer: safeInterviewer,
+        interviewee: safeInterviewee,
+        role,
+        partner
+      };
+    }));
     
-    res.json(enrichedInterviews);
+    res.status(200).json(slotsWithUsers);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Error fetching past interviews', error: error.message });
   }
 };
 
-// @desc    Get all user's interviews (both upcoming and past)
-// @route   GET /api/interview-slots
-// @access  Private
 export const getAllUserInterviews = async (req, res) => {
   try {
-    // Get upcoming interviews
-    const upcomingInterviews = await storage.getUserUpcomingInterviews(req.user.id);
+    const userId = req.user.id;
     
-    // Get past interviews
-    const pastInterviews = await storage.getUserPastInterviews(req.user.id);
+    // Get both upcoming and past interviews
+    const upcomingInterviews = await storage.getUserUpcomingInterviews(userId);
+    const pastInterviews = await storage.getUserPastInterviews(userId);
     
-    // Enrich with user data
-    const enrichedUpcoming = await enrichInterviewSlots(upcomingInterviews);
-    const enrichedPast = await enrichInterviewSlots(pastInterviews);
+    // Merge and sort by date (soonest first for upcoming, most recent first for past)
+    const allInterviews = [
+      ...upcomingInterviews.map(interview => ({ ...interview, type: 'upcoming' })),
+      ...pastInterviews.map(interview => ({ ...interview, type: 'past' }))
+    ];
     
-    res.json({
-      upcoming: enrichedUpcoming,
-      past: enrichedPast
-    });
+    // Get user details for each interview
+    const interviewsWithUsers = await Promise.all(allInterviews.map(async (interview) => {
+      const interviewer = await storage.getUser(interview.interviewerId);
+      let interviewee = null;
+      
+      if (interview.intervieweeId) {
+        interviewee = await storage.getUser(interview.intervieweeId);
+      }
+      
+      // Clean user objects
+      let safeInterviewer = null;
+      let safeInterviewee = null;
+      
+      if (interviewer) {
+        const { password, ...safe } = interviewer;
+        safeInterviewer = safe;
+      }
+      
+      if (interviewee) {
+        const { password, ...safe } = interviewee;
+        safeInterviewee = safe;
+      }
+      
+      // Determine the role and partner
+      let role, partner;
+      
+      if (interview.interviewerId === userId) {
+        role = 'interviewer';
+        partner = safeInterviewee;
+      } else {
+        role = 'interviewee';
+        partner = safeInterviewer;
+      }
+      
+      return {
+        ...interview,
+        interviewer: safeInterviewer,
+        interviewee: safeInterviewee,
+        role,
+        partner
+      };
+    }));
+    
+    res.status(200).json(interviewsWithUsers);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Error fetching all interviews', error: error.message });
   }
 };
 
-// @desc    Book an interview slot
-// @route   PUT /api/interview-slots/:id/book
-// @access  Private
 export const bookInterviewSlot = async (req, res) => {
   try {
     const slotId = parseInt(req.params.id);
+    const intervieweeId = req.user.id;
     
-    // Find the slot
-    const interviewSlot = await storage.getInterviewSlotById(slotId);
+    // Get the slot to verify eligibility
+    const slot = await storage.getInterviewSlotById(slotId);
     
-    if (!interviewSlot) {
+    if (!slot) {
       return res.status(404).json({ message: 'Interview slot not found' });
     }
     
-    // Check if slot is available
-    if (interviewSlot.status !== "Available") {
-      return res.status(400).json({ message: 'This slot is not available for booking' });
+    // Check if the slot is available
+    if (slot.status !== 'Available') {
+      return res.status(400).json({ message: 'Interview slot is not available for booking' });
     }
     
-    // Check if user is trying to book their own slot
-    if (interviewSlot.interviewerId === req.user.id) {
+    // Make sure the user isn't booking their own slot
+    if (slot.interviewerId === intervieweeId) {
       return res.status(400).json({ message: 'You cannot book your own interview slot' });
     }
     
-    // Update the slot
-    const updatedSlot = await storage.bookInterviewSlot(slotId, req.user.id);
+    // Book the slot
+    const updatedSlot = await storage.bookInterviewSlot(slotId, intervieweeId);
     
     if (!updatedSlot) {
       return res.status(500).json({ message: 'Failed to book interview slot' });
     }
     
-    // Get user info
+    // Get user details
     const interviewer = await storage.getUser(updatedSlot.interviewerId);
     const interviewee = await storage.getUser(updatedSlot.intervieweeId);
     
-    res.json({
+    // Clean user objects
+    let safeInterviewer = null;
+    let safeInterviewee = null;
+    
+    if (interviewer) {
+      const { password, ...safe } = interviewer;
+      safeInterviewer = safe;
+    }
+    
+    if (interviewee) {
+      const { password, ...safe } = interviewee;
+      safeInterviewee = safe;
+    }
+    
+    // Return slot with user details
+    const slotWithDetails = {
       ...updatedSlot,
-      interviewer: { ...interviewer, password: undefined },
-      interviewee: { ...interviewee, password: undefined }
-    });
+      interviewer: safeInterviewer,
+      interviewee: safeInterviewee
+    };
+    
+    res.status(200).json(slotWithDetails);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Error booking interview slot', error: error.message });
   }
 };
 
-// @desc    Cancel an interview slot
-// @route   PUT /api/interview-slots/:id/cancel
-// @access  Private
 export const cancelInterviewSlot = async (req, res) => {
   try {
     const slotId = parseInt(req.params.id);
+    const userId = req.user.id;
     
-    // Find the slot
-    const interviewSlot = await storage.getInterviewSlotById(slotId);
+    // Get the slot
+    const slot = await storage.getInterviewSlotById(slotId);
     
-    if (!interviewSlot) {
+    if (!slot) {
       return res.status(404).json({ message: 'Interview slot not found' });
     }
     
-    // Check if user is either the interviewer or interviewee
-    const isInterviewer = interviewSlot.interviewerId === req.user.id;
-    const isInterviewee = interviewSlot.intervieweeId && interviewSlot.intervieweeId === req.user.id;
-    
-    if (!isInterviewer && !isInterviewee) {
-      return res.status(401).json({ message: 'Not authorized to cancel this interview' });
+    // Check if user is authorized to cancel
+    if (slot.interviewerId !== userId && slot.intervieweeId !== userId) {
+      return res.status(403).json({ message: 'Not authorized to cancel this interview slot' });
     }
     
-    let updatedSlot;
-    
-    // If interviewer cancels, change status to canceled
-    if (isInterviewer) {
-      // Create updated slot object
-      updatedSlot = {
-        ...interviewSlot,
-        status: "Cancelled"
-      };
-      
-      // Update in storage
-      await storage.cancelInterviewSlot(slotId);
+    // Check if the slot is booked
+    if (slot.status !== 'Booked') {
+      return res.status(400).json({ message: 'Only booked interview slots can be cancelled' });
     }
     
-    // If interviewee cancels, make slot available again
-    if (isInterviewee) {
-      // Create updated slot object
-      updatedSlot = {
-        ...interviewSlot,
-        status: "Available",
-        intervieweeId: null
-      };
-      
-      // For this case, we need a special method (not implemented yet)
-      // For now, we'll use cancelInterviewSlot which sets status to "Cancelled"
-      await storage.cancelInterviewSlot(slotId);
+    // Cancel the slot
+    const updatedSlot = await storage.cancelInterviewSlot(slotId);
+    
+    if (!updatedSlot) {
+      return res.status(500).json({ message: 'Failed to cancel interview slot' });
     }
     
-    // Get user info
-    const interviewer = await storage.getUser(updatedSlot.interviewerId);
-    let interviewee = null;
-    if (updatedSlot.intervieweeId) {
-      interviewee = await storage.getUser(updatedSlot.intervieweeId);
-    }
-    
-    res.json({
-      ...updatedSlot,
-      interviewer: { ...interviewer, password: undefined },
-      interviewee: interviewee ? { ...interviewee, password: undefined } : null
-    });
+    res.status(200).json(updatedSlot);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Error cancelling interview slot', error: error.message });
   }
 };
