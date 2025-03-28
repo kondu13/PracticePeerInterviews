@@ -58,6 +58,15 @@ export class MemStorage {
       (user) => user.skills.includes(skill)
     );
   }
+  
+  async updateUser(id, updates) {
+    const user = this.users.get(id);
+    if (!user) return undefined;
+    
+    const updatedUser = { ...user, ...updates };
+    this.users.set(id, updatedUser);
+    return updatedUser;
+  }
 
   // Match request methods
   async createMatchRequest(request) {
@@ -89,11 +98,15 @@ export class MemStorage {
     );
   }
   
-  async updateMatchRequestStatus(id, status) {
+  async updateMatchRequestStatus(id, status, matchedPeerId = null) {
     const request = this.matchRequests.get(id);
     if (!request) return undefined;
     
-    const updatedRequest = { ...request, status };
+    const updatedRequest = { 
+      ...request, 
+      status,
+      ...(matchedPeerId ? { matchedPeerId } : {})
+    };
     this.matchRequests.set(id, updatedRequest);
     return updatedRequest;
   }
@@ -252,6 +265,18 @@ export class MongoStorage {
     await this.ensureConnected();
     return await this.db.collection('users').find({ skills: skill }).toArray();
   }
+  
+  async updateUser(id, updates) {
+    await this.ensureConnected();
+    
+    const result = await this.db.collection('users').findOneAndUpdate(
+      { id },
+      { $set: updates },
+      { returnDocument: 'after' }
+    );
+    
+    return result.value || undefined;
+  }
 
   // Match request methods
   async createMatchRequest(request) {
@@ -294,12 +319,18 @@ export class MongoStorage {
     return await this.db.collection('matchRequests').find({ requesterId: userId }).toArray();
   }
   
-  async updateMatchRequestStatus(id, status) {
+  async updateMatchRequestStatus(id, status, matchedPeerId = null) {
     await this.ensureConnected();
+    
+    // Create update object
+    const updateObj = { status };
+    if (matchedPeerId) {
+      updateObj.matchedPeerId = matchedPeerId;
+    }
     
     const result = await this.db.collection('matchRequests').findOneAndUpdate(
       { id },
-      { $set: { status } },
+      { $set: updateObj },
       { returnDocument: 'after' }
     );
     
@@ -397,6 +428,5 @@ export class MongoStorage {
   }
 }
 
-// Use MongoDB storage
-const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/mockinterviews";
-export const storage = new MongoStorage(MONGODB_URI);
+// Use in-memory storage for simplicity and consistency
+export const storage = new MemStorage();

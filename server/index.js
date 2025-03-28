@@ -1,54 +1,21 @@
 // Main server entry point
 import express from 'express';
-import mongoose from 'mongoose';
 import dotenv from 'dotenv';
-import { startMongoMemoryServer, stopMongoMemoryServer } from './config/mongodb.js';
-import { seedTestUsers } from './config/seed-data.js';
 import { registerRoutes } from './routes.js';
 import { log, setupVite, serveStatic } from './vite.js';
+import { storage } from './storage.js';
+import { seedTestUsers } from './config/seed-data.js';
 
 // Load environment variables from .env file
 dotenv.config();
 
-// Handle application shutdown
-process.on('SIGINT', async () => {
-  try {
-    await mongoose.disconnect();
-    log('Mongoose disconnected through app termination', 'mongodb');
-    
-    await stopMongoMemoryServer();
-    
-    process.exit(0);
-  } catch (error) {
-    log(`Error during shutdown: ${error.message}`, 'error');
-    process.exit(1);
-  }
-});
-
 async function main() {
   try {
-    let mongoUri;
-    
-    // If no MongoDB URI is provided, use MongoDB Memory Server
-    if (!process.env.MONGODB_URI || process.env.MONGODB_URI === 'mongodb://localhost:27017/mockinterviews') {
-      mongoUri = await startMongoMemoryServer();
-    } else {
-      mongoUri = process.env.MONGODB_URI;
-    }
-    
-    // Connect to MongoDB
-    await mongoose.connect(mongoUri);
-    log('Connected to MongoDB', 'mongodb');
-    
-    // Load models - must be done before seeding
-    await import('./models/User.js');
-    await import('./models/MatchRequest.js');
-    await import('./models/InterviewSlot.js');
-    
-    // Seed the database with test users
+    // Seed the in-memory database with test users
     await seedTestUsers();
+    log('Seeded test users to in-memory storage', 'seed');
   } catch (error) {
-    log(`Failed to start MongoDB or connect: ${error.message}`, 'error');
+    log(`Failed to seed test data: ${error.message}`, 'error');
     throw error;
   }
   

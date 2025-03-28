@@ -1,8 +1,8 @@
 // Seed data configuration
-import mongoose from 'mongoose';
 import { scrypt, randomBytes } from 'crypto';
 import { promisify } from 'util';
 import { log } from '../vite.js';
+import { storage } from '../storage.js';
 
 const scryptAsync = promisify(scrypt);
 
@@ -68,24 +68,21 @@ const testUsers = [
 
 export async function seedTestUsers() {
   try {
-    // Load the User model
-    const User = mongoose.model('User');
-    
     // Check if users already exist
-    const existingUsers = await User.countDocuments();
-    if (existingUsers > 0) {
-      log(`Database already has ${existingUsers} users, skipping seed`, 'seed');
+    const existingUsers = await storage.getUsers();
+    if (existingUsers.length > 0) {
+      log(`Storage already has ${existingUsers.length} users, skipping seed`, 'seed');
       return;
     }
     
-    log('Seeding test users to database...', 'seed');
+    log('Seeding test users to in-memory storage...', 'seed');
     
     // Create test users
     const createdUsers = [];
     for (const userData of testUsers) {
       try {
         // Check if user already exists
-        const existingUser = await User.findOne({ username: userData.username });
+        const existingUser = await storage.getUserByUsername(userData.username);
         if (existingUser) {
           log(`User ${userData.username} already exists, skipping`, 'seed');
           continue;
@@ -95,7 +92,7 @@ export async function seedTestUsers() {
         const hashedPassword = await hashPassword(userData.password);
         
         // Create the user with the hashed password
-        const user = await User.create({
+        const user = await storage.createUser({
           ...userData,
           password: hashedPassword
         });
