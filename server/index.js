@@ -27,8 +27,14 @@ process.on('SIGINT', async () => {
 
 async function main() {
   try {
-    // Start MongoDB Memory Server
-    const mongoUri = await startMongoMemoryServer();
+    let mongoUri;
+    
+    // If no MongoDB URI is provided, use MongoDB Memory Server
+    if (!process.env.MONGODB_URI || process.env.MONGODB_URI === 'mongodb://localhost:27017/mockinterviews') {
+      mongoUri = await startMongoMemoryServer();
+    } else {
+      mongoUri = process.env.MONGODB_URI;
+    }
     
     // Connect to MongoDB
     await mongoose.connect(mongoUri);

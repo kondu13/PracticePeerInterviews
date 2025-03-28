@@ -224,7 +224,9 @@ export class MongoStorage implements IStorage {
     this.sessionStore = new MemoryStore({
       checkPeriod: 86400000, // 24 hours
     });
-    this.connect();
+    
+    // Connect to the database
+    setTimeout(() => this.connect(), 500); // Add slight delay to ensure MongoDB Memory Server is up
   }
 
   private async connect() {
@@ -440,7 +442,7 @@ export class MongoStorage implements IStorage {
   }
 }
 
-// Use the in-memory storage implementation for now
-// const MONGODB_URI = "mongodb+srv://kondukarthik:6qcmmt4Lj7InMqlA@cluster0.e2zjdgs.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
-// export const storage = new MongoStorage(MONGODB_URI);
-export const storage = new MemStorage();
+// Use MongoDB storage when MONGODB_URI is available
+export const storage = process.env.MONGODB_URI
+  ? new MongoStorage(process.env.MONGODB_URI)
+  : new MemStorage();

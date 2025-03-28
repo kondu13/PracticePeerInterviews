@@ -179,7 +179,9 @@ export class MongoStorage {
       ttl: 24 * 60 * 60 // 24 hours
     });
     this.connected = false;
-    this.connect();
+    
+    // Connect to the database
+    setTimeout(() => this.connect(), 500); // Add slight delay to ensure MongoDB Memory Server is up
   }
 
   async connect() {

@@ -6,32 +6,37 @@ import dotenv from "dotenv";
 // Load environment variables from .env file
 dotenv.config();
 
-// Import MongoDB memory server dynamically to avoid TypeScript errors
-import("./config/mongodb.js").then(async ({ startMongoMemoryServer }) => {
-  // Start MongoDB Memory Server if needed
-  if (!process.env.MONGODB_URI || process.env.MONGODB_URI === 'mongodb://localhost:27017/mockinterviews') {
-    try {
-      const mongoUri = await startMongoMemoryServer();
-      
-      // Import mongoose and connect
-      const mongoose = await import('mongoose');
-      await mongoose.default.connect(mongoUri);
-      log('Connected to MongoDB', 'mongodb');
-      
-      // Load models - must be done before seeding
-      await import('./models/User.js');
-      await import('./models/MatchRequest.js');
-      await import('./models/InterviewSlot.js');
-      
-      // Import and run seed function
-      const { seedTestUsers } = await import('./config/seed-data');
-      await seedTestUsers();
-    } catch (err: any) {
-      console.error('Failed to start MongoDB Memory Server:', err);
+// Setup MongoDB connection before starting the application
+(async function setupMongoDB() {
+  try {
+    let mongoUri;
+    
+    // If no MongoDB URI is provided, use MongoDB Memory Server
+    if (!process.env.MONGODB_URI || process.env.MONGODB_URI === 'mongodb://localhost:27017/mockinterviews') {
+      const { startMongoMemoryServer } = await import('./config/mongodb.js');
+      mongoUri = await startMongoMemoryServer();
+    } else {
+      mongoUri = process.env.MONGODB_URI;
     }
+    
+    // Import mongoose and connect
+    const mongoose = await import('mongoose');
+    await mongoose.default.connect(mongoUri);
+    log('Connected to MongoDB', 'mongodb');
+    
+    // Load models - must be done before seeding
+    await import('./models/User.js');
+    await import('./models/MatchRequest.js');
+    await import('./models/InterviewSlot.js');
+    
+    // Import and run seed function
+    const { seedTestUsers } = await import('./config/seed-data');
+    await seedTestUsers();
+  } catch (err: any) {
+    console.error('Failed to set up MongoDB:', err);
   }
-}).catch((err: Error) => {
-  console.error('Error importing MongoDB memory server module:', err);
+})().catch((err: Error) => {
+  console.error('Error in MongoDB setup:', err);
 });
 
 const app = express();
