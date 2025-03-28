@@ -1,6 +1,5 @@
 import { createServer } from 'http';
 import { log } from './vite.js';
-import connectDB from './config/db.js';
 import { setupAuth } from './auth.js';
 
 // Import controllers
@@ -17,9 +16,6 @@ const isAuthenticated = (req, res, next) => {
 };
 
 export async function registerRoutes(app) {
-  // Connect to MongoDB
-  await connectDB();
-  
   // Setup authentication
   setupAuth(app);
   

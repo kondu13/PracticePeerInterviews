@@ -1,33 +1,29 @@
+// MongoDB Memory Server configuration
 import { MongoMemoryServer } from 'mongodb-memory-server';
+import { log } from '../vite.js';
 
 let mongoServer;
 
 export async function startMongoMemoryServer() {
-  // Start MongoDB Memory Server
-  mongoServer = await MongoMemoryServer.create();
-  const mongoUri = mongoServer.getUri();
-  
-  // Set the MongoDB URI environment variable
-  process.env.MONGODB_URI = mongoUri;
-  
-  console.log(`MongoDB Memory Server running at ${mongoUri}`);
-  return mongoUri;
+  try {
+    // Create MongoDB Memory Server
+    mongoServer = await MongoMemoryServer.create();
+    const mongoUri = mongoServer.getUri();
+    
+    // Set to environment for other parts of the application
+    process.env.MONGODB_URI = mongoUri;
+    
+    log(`MongoDB Memory Server running at ${mongoUri}`, 'mongodb');
+    return mongoUri;
+  } catch (error) {
+    log(`Failed to start MongoDB Memory Server: ${error.message}`, 'error');
+    throw error;
+  }
 }
 
 export async function stopMongoMemoryServer() {
   if (mongoServer) {
     await mongoServer.stop();
-    console.log('MongoDB Memory Server stopped');
+    log('MongoDB Memory Server stopped', 'mongodb');
   }
 }
-
-// Handle process termination
-process.on('SIGINT', async () => {
-  await stopMongoMemoryServer();
-  process.exit(0);
-});
-
-process.on('SIGTERM', async () => {
-  await stopMongoMemoryServer();
-  process.exit(0);
-});

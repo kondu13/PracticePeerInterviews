@@ -7,12 +7,28 @@ import dotenv from "dotenv";
 dotenv.config();
 
 // Import MongoDB memory server dynamically to avoid TypeScript errors
-import("./config/mongodb.js").then(({ startMongoMemoryServer }) => {
+import("./config/mongodb.js").then(async ({ startMongoMemoryServer }) => {
   // Start MongoDB Memory Server if needed
   if (!process.env.MONGODB_URI || process.env.MONGODB_URI === 'mongodb://localhost:27017/mockinterviews') {
-    startMongoMemoryServer().catch((err: Error) => {
+    try {
+      const mongoUri = await startMongoMemoryServer();
+      
+      // Import mongoose and connect
+      const mongoose = await import('mongoose');
+      await mongoose.default.connect(mongoUri);
+      log('Connected to MongoDB', 'mongodb');
+      
+      // Load models - must be done before seeding
+      await import('./models/User.js');
+      await import('./models/MatchRequest.js');
+      await import('./models/InterviewSlot.js');
+      
+      // Import and run seed function
+      const { seedTestUsers } = await import('./config/seed-data');
+      await seedTestUsers();
+    } catch (err: any) {
       console.error('Failed to start MongoDB Memory Server:', err);
-    });
+    }
   }
 }).catch((err: Error) => {
   console.error('Error importing MongoDB memory server module:', err);

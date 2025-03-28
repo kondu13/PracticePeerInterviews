@@ -1,12 +1,9 @@
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import session from "express-session";
-import connectMongo from "connect-mongo";
+import MongoStore from "connect-mongo";
 import { hashPassword, comparePasswords } from "./controllers/userController.js";
 import User from "./models/User.js";
-
-// Connect MongoDB Session Store
-const MongoStore = connectMongo(session);
 
 export function setupAuth(app) {
   // Session configuration

@@ -1,19 +1,48 @@
-import express from "express";
-import { registerRoutes } from "./routes.js";
-import { setupVite, serveStatic, log } from "./vite.js";
-import dotenv from "dotenv";
-import { startMongoMemoryServer } from './config/mongodb.js';
+// Main server entry point
+import express from 'express';
+import mongoose from 'mongoose';
+import dotenv from 'dotenv';
+import { startMongoMemoryServer, stopMongoMemoryServer } from './config/mongodb.js';
+import { seedTestUsers } from './config/seed-data.js';
+import { registerRoutes } from './routes.js';
+import { log, setupVite, serveStatic } from './vite.js';
 
 // Load environment variables from .env file
 dotenv.config();
 
+// Handle application shutdown
+process.on('SIGINT', async () => {
+  try {
+    await mongoose.disconnect();
+    log('Mongoose disconnected through app termination', 'mongodb');
+    
+    await stopMongoMemoryServer();
+    
+    process.exit(0);
+  } catch (error) {
+    log(`Error during shutdown: ${error.message}`, 'error');
+    process.exit(1);
+  }
+});
+
 async function main() {
   try {
     // Start MongoDB Memory Server
-    await startMongoMemoryServer();
-    log('MongoDB Memory Server started successfully');
+    const mongoUri = await startMongoMemoryServer();
+    
+    // Connect to MongoDB
+    await mongoose.connect(mongoUri);
+    log('Connected to MongoDB', 'mongodb');
+    
+    // Load models - must be done before seeding
+    await import('./models/User.js');
+    await import('./models/MatchRequest.js');
+    await import('./models/InterviewSlot.js');
+    
+    // Seed the database with test users
+    await seedTestUsers();
   } catch (error) {
-    log(`Failed to start MongoDB Memory Server: ${error.message}`, 'error');
+    log(`Failed to start MongoDB or connect: ${error.message}`, 'error');
     throw error;
   }
   
