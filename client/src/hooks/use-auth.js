@@ -1,12 +1,10 @@
-import { createContext, useContext } from "react";
+import { createContext, useContext, ReactNode } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { getQueryFn, apiRequest, queryClient } from "../lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
+import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const { toast } = useToast();
   const {
     data: user,
     error,
@@ -25,28 +23,20 @@ export function AuthProvider({ children }) {
       queryClient.setQueryData(["/api/user"], user);
     },
     onError: (error) => {
-      toast({
-        title: "Login failed",
-        description: error.message,
-        variant: "destructive",
-      });
+      console.error("Login failed:", error);
     },
   });
 
   const registerMutation = useMutation({
-    mutationFn: async (credentials) => {
-      const res = await apiRequest("POST", "/api/register", credentials);
+    mutationFn: async (userData) => {
+      const res = await apiRequest("POST", "/api/register", userData);
       return await res.json();
     },
     onSuccess: (user) => {
       queryClient.setQueryData(["/api/user"], user);
     },
     onError: (error) => {
-      toast({
-        title: "Registration failed",
-        description: error.message,
-        variant: "destructive",
-      });
+      console.error("Registration failed:", error);
     },
   });
 
@@ -58,11 +48,7 @@ export function AuthProvider({ children }) {
       queryClient.setQueryData(["/api/user"], null);
     },
     onError: (error) => {
-      toast({
-        title: "Logout failed",
-        description: error.message,
-        variant: "destructive",
-      });
+      console.error("Logout failed:", error);
     },
   });
 

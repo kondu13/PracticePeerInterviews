@@ -1,13 +1,3 @@
-[nix]
-channel = "stable-23_11"
-
-[unitTest]
-language = "nodejs"
-
-[server]
-command = "node simplified-server.js"
-persistent = true
-
-[client]
-command = "node start-client.js"
-persistent = true
+[workflows.app]
+run = "node index.js"
+onBoot = true

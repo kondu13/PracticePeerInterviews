@@ -1,24 +1,25 @@
 import { Switch, Route } from "wouter";
-import { queryClient } from "./lib/queryClient.js";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from "@/hooks/use-auth";
-import NotFound from "./pages/not-found.js";
-import AuthPage from "./pages/auth-page.js";
-import HomePage from "./pages/home-page.js"; 
-import DashboardPage from "./pages/dashboard-page.js";
-import MatchRequestsPage from "./pages/match-requests-page.js";
-import ScheduledInterviewsPage from "./pages/scheduled-interviews-page.js";
-import { ProtectedRoute } from "./lib/protected-route.js";
+import { queryClient } from "@/lib/queryClient";
+import { ProtectedRoute } from "./lib/protected-route";
+
+// Pages
+import HomePage from "@/pages/home-page";
+import AuthPage from "@/pages/auth-page";
+import DashboardPage from "@/pages/dashboard-page";
+import ScheduledInterviewsPage from "@/pages/scheduled-interviews-page";
+import MatchRequestsPage from "@/pages/match-requests-page";
+import NotFound from "@/pages/not-found";
 
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={HomePage} /> {/* Public home page */}
-      <ProtectedRoute path="/dashboard" component={DashboardPage} /> {/* Protected dashboard */}
-      <ProtectedRoute path="/match-requests" component={MatchRequestsPage} />
-      <ProtectedRoute path="/scheduled-interviews" component={ScheduledInterviewsPage} />
+      <Route path="/" component={HomePage} />
       <Route path="/auth" component={AuthPage} />
+      <ProtectedRoute path="/dashboard" component={DashboardPage} />
+      <ProtectedRoute path="/scheduled-interviews" component={ScheduledInterviewsPage} />
+      <ProtectedRoute path="/match-requests" component={MatchRequestsPage} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -29,7 +30,6 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <Router />
-        <Toaster />
       </AuthProvider>
     </QueryClientProvider>
   );
