@@ -394,6 +394,6 @@ export class MongoStorage {
 }
 
 // Use the in-memory storage implementation for now
-// const MONGODB_URI = "mongodb+srv://username:password@cluster0.example.mongodb.net/?retryWrites=true&w=majority&appName=ClusterName";
+// const MONGODB_URI = "mongodb+srv://user:password@cluster.mongodb.net/?retryWrites=true&w=majority";
 // export const storage = new MongoStorage(MONGODB_URI);
 export const storage = new MemStorage();
