@@ -1,410 +1,126 @@
-import { createServer } from "http";
-import { storage } from "./storage.js";
-import { setupAuth } from "./auth.js";
-import { z } from "zod";
+import { createServer } from 'http';
+import express from 'express';
+import passport from 'passport';
+import { Strategy as LocalStrategy } from 'passport-local';
+import session from 'express-session';
+import connectMongo from 'connect-mongo';
+import { log } from './vite.js';
+import connectDB from './config/db.js';
+import User from './models/User.js';
+import { comparePasswords } from './controllers/userController.js';
 
-// Middleware to ensure user is authenticated
-const ensureAuthenticated = (req, res, next) => {
+// Import controllers
+import * as authController from './controllers/authController.js';
+import * as userController from './controllers/userController.js';
+import * as matchRequestController from './controllers/matchRequestController.js';
+import * as interviewSlotController from './controllers/interviewSlotController.js';
+
+// Auth middleware
+const isAuthenticated = (req, res, next) => {
   if (req.isAuthenticated()) {
     return next();
   }
-  res.status(401).json({ message: "Not authenticated" });
+  return res.status(401).json({ message: 'Not authenticated' });
 };
 
+// Connect MongoDB Session Store
+const MongoStore = connectMongo(session);
+
 export async function registerRoutes(app) {
-  // Setup authentication routes
-  setupAuth(app);
-
-  // API Routes for the mock interview application
+  // Connect to MongoDB
+  const conn = await connectDB();
   
-  // Users API
-  app.get("/api/users", ensureAuthenticated, async (req, res) => {
-    try {
-      const users = await storage.getUsers();
-      // Don't send current user in the list
-      const filteredUsers = users.filter(user => user.id !== req.user?.id);
-      res.json(filteredUsers);
-    } catch (error) {
-      res.status(500).json({ message: "Error fetching users" });
+  // Session configuration
+  const sessionSettings = {
+    secret: process.env.SESSION_SECRET || 'interview-platform-secret',
+    resave: false,
+    saveUninitialized: false,
+    store: new MongoStore({ 
+      mongoUrl: conn.connection.client.options.credentials.credentials.source,
+      collectionName: 'sessions'
+    }),
+    cookie: { 
+      maxAge: 1000 * 60 * 60 * 24, // 1 day
+      httpOnly: true,
+      sameSite: 'lax'
     }
-  });
+  };
 
-  app.get("/api/users/filter", ensureAuthenticated, async (req, res) => {
+  // In production, set secure cookie
+  if (process.env.NODE_ENV === 'production') {
+    app.set('trust proxy', 1); // trust first proxy
+    sessionSettings.cookie.secure = true; // serve secure cookies
+  }
+
+  app.use(session(sessionSettings));
+  app.use(passport.initialize());
+  app.use(passport.session());
+  
+  // Passport local strategy
+  passport.use(new LocalStrategy(async (username, password, done) => {
     try {
-      const { experienceLevel, skill } = req.query;
-      let users = await storage.getUsers();
-      
-      // Filter by experience level if provided
-      if (experienceLevel && typeof experienceLevel === 'string') {
-        users = await storage.getUsersByExperienceLevel(experienceLevel);
+      const user = await User.findOne({ username });
+      if (!user) {
+        return done(null, false, { message: 'Incorrect username or password.' });
       }
       
-      // Filter by skill if provided
-      if (skill && typeof skill === 'string') {
-        users = await storage.getUsersBySkill(skill);
+      const isMatch = await comparePasswords(password, user.password);
+      if (!isMatch) {
+        return done(null, false, { message: 'Incorrect username or password.' });
       }
       
-      // Don't send current user in the list
-      const filteredUsers = users.filter(user => user.id !== req.user?.id);
-      res.json(filteredUsers);
+      return done(null, user);
     } catch (error) {
-      res.status(500).json({ message: "Error filtering users" });
+      return done(error);
     }
+  }));
+  
+  passport.serializeUser((user, done) => {
+    done(null, user._id);
   });
-
-  // Match Requests API
-  app.post("/api/match-request", ensureAuthenticated, async (req, res) => {
+  
+  passport.deserializeUser(async (id, done) => {
     try {
-      // Don't use schema validation for now due to import issues
-      const validatedData = {
-        ...req.body,
-        requesterId: req.user?.id,
-        status: "Pending"
-      };
-      
-      const matchRequest = await storage.createMatchRequest(validatedData);
-      res.status(201).json(matchRequest);
+      const user = await User.findById(id).select('-password');
+      done(null, user);
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        res.status(400).json({ message: "Invalid request data", errors: error.errors });
-      } else {
-        res.status(500).json({ message: "Error creating match request" });
-      }
-    }
-  });
-
-  app.get("/api/match-requests", ensureAuthenticated, async (req, res) => {
-    try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ message: "User not authenticated" });
-      }
-      
-      const incoming = await storage.getIncomingMatchRequests(userId);
-      const outgoing = await storage.getOutgoingMatchRequests(userId);
-      
-      // Get user details for each request
-      const incomingWithUsers = await Promise.all(
-        incoming.map(async (request) => {
-          const requester = await storage.getUser(request.requesterId);
-          return { ...request, requester };
-        })
-      );
-      
-      const outgoingWithUsers = await Promise.all(
-        outgoing.map(async (request) => {
-          const matchedPeer = await storage.getUser(request.matchedPeerId);
-          return { ...request, matchedPeer };
-        })
-      );
-      
-      res.json({
-        incoming: incomingWithUsers,
-        outgoing: outgoingWithUsers
-      });
-    } catch (error) {
-      res.status(500).json({ message: "Error fetching match requests" });
-    }
-  });
-
-  app.patch("/api/match-request/:id", ensureAuthenticated, async (req, res) => {
-    try {
-      const { id } = req.params;
-      const { status } = req.body;
-      
-      if (!status || !["Accepted", "Declined"].includes(status)) {
-        return res.status(400).json({ message: "Invalid status" });
-      }
-      
-      const matchRequest = await storage.getMatchRequestById(parseInt(id));
-      
-      // Check if the request exists and the user is the matched peer
-      if (!matchRequest) {
-        return res.status(404).json({ message: "Match request not found" });
-      }
-      
-      if (matchRequest.matchedPeerId !== req.user?.id) {
-        return res.status(403).json({ message: "Not authorized to update this match request" });
-      }
-      
-      const updatedRequest = await storage.updateMatchRequestStatus(parseInt(id), status);
-      
-      // If the request was accepted, create an interview slot
-      if (status === "Accepted" && updatedRequest) {
-        const interviewSlot = await storage.createInterviewSlot({
-          interviewerId: matchRequest.matchedPeerId,
-          intervieweeId: matchRequest.requesterId,
-          slotTime: matchRequest.requestedTime,
-          endTime: new Date(new Date(matchRequest.requestedTime).getTime() + 60 * 60 * 1000), // 1 hour duration
-          status: "Booked",
-          meetingLink: `https://meet.google.com/mock-interview-${Math.random().toString(36).substring(2, 8)}`
-        });
-      }
-      
-      res.json(updatedRequest);
-    } catch (error) {
-      res.status(500).json({ message: "Error updating match request" });
-    }
-  });
-
-  // Interview Slots API
-  app.post("/api/book-slot", ensureAuthenticated, async (req, res) => {
-    try {
-      // Extract data from request body
-      const { slotTime, endTime, meetingLink } = req.body;
-      
-      // Don't use schema validation for now due to import issues
-      const validatedData = {
-        interviewerId: req.user?.id,
-        slotTime, 
-        endTime,
-        meetingLink,
-        status: "Available"
-      };
-      
-      const interviewSlot = await storage.createInterviewSlot(validatedData);
-      res.status(201).json(interviewSlot);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        res.status(400).json({ message: "Invalid slot data", errors: error.errors });
-      } else {
-        res.status(500).json({ message: "Error creating interview slot" });
-      }
-    }
-  });
-
-  app.get("/api/available-slots", ensureAuthenticated, async (req, res) => {
-    try {
-      const slots = await storage.getAvailableSlots();
-      
-      // Get user details for each slot
-      const slotsWithUsers = await Promise.all(
-        slots.map(async (slot) => {
-          const interviewer = await storage.getUser(slot.interviewerId);
-          return { ...slot, interviewer };
-        })
-      );
-      
-      res.json(slotsWithUsers);
-    } catch (error) {
-      res.status(500).json({ message: "Error fetching available slots" });
-    }
-  });
-
-  app.get("/api/interviews", ensureAuthenticated, async (req, res) => {
-    try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ message: "User not authenticated" });
-      }
-      
-      const upcoming = await storage.getUserUpcomingInterviews(userId);
-      const past = await storage.getUserPastInterviews(userId);
-      
-      // Get user details for each interview
-      const upcomingWithUsers = await Promise.all(
-        upcoming.map(async (interview) => {
-          const interviewer = await storage.getUser(interview.interviewerId);
-          const interviewee = interview.intervieweeId 
-            ? await storage.getUser(interview.intervieweeId)
-            : null;
-          return { 
-            ...interview, 
-            interviewer,
-            interviewee,
-            partner: userId === interview.interviewerId ? interviewee : interviewer
-          };
-        })
-      );
-      
-      const pastWithUsers = await Promise.all(
-        past.map(async (interview) => {
-          const interviewer = await storage.getUser(interview.interviewerId);
-          const interviewee = interview.intervieweeId 
-            ? await storage.getUser(interview.intervieweeId)
-            : null;
-          return { 
-            ...interview, 
-            interviewer,
-            interviewee,
-            partner: userId === interview.interviewerId ? interviewee : interviewer
-          };
-        })
-      );
-      
-      res.json({
-        upcoming: upcomingWithUsers,
-        past: pastWithUsers
-      });
-    } catch (error) {
-      res.status(500).json({ message: "Error fetching interviews" });
-    }
-  });
-
-  app.patch("/api/book-slot/:id", ensureAuthenticated, async (req, res) => {
-    try {
-      const { id } = req.params;
-      const userId = req.user?.id;
-      
-      if (!userId) {
-        return res.status(401).json({ message: "User not authenticated" });
-      }
-      
-      const updatedSlot = await storage.bookInterviewSlot(parseInt(id), userId);
-      
-      if (!updatedSlot) {
-        return res.status(404).json({ message: "Slot not found or not available" });
-      }
-      
-      res.json(updatedSlot);
-    } catch (error) {
-      res.status(500).json({ message: "Error booking slot" });
-    }
-  });
-
-  app.delete("/api/cancel-slot/:id", ensureAuthenticated, async (req, res) => {
-    try {
-      const { id } = req.params;
-      const userId = req.user?.id;
-      
-      if (!userId) {
-        return res.status(401).json({ message: "User not authenticated" });
-      }
-      
-      const slot = await storage.getInterviewSlotById(parseInt(id));
-      
-      // Check if the slot exists and the user is part of the interview
-      if (!slot) {
-        return res.status(404).json({ message: "Interview slot not found" });
-      }
-      
-      if (slot.interviewerId !== userId && slot.intervieweeId !== userId) {
-        return res.status(403).json({ message: "Not authorized to cancel this interview" });
-      }
-      
-      const cancelledSlot = await storage.cancelInterviewSlot(parseInt(id));
-      
-      if (!cancelledSlot) {
-        return res.status(400).json({ message: "Could not cancel slot" });
-      }
-      
-      res.json(cancelledSlot);
-    } catch (error) {
-      res.status(500).json({ message: "Error cancelling slot" });
+      done(error);
     }
   });
   
-  // Update meeting link for an interview slot
-  app.patch("/api/update-meeting-link/:id", ensureAuthenticated, async (req, res) => {
-    try {
-      const { id } = req.params;
-      const { meetingLink } = req.body;
-      const userId = req.user?.id;
-      
-      if (!userId) {
-        return res.status(401).json({ message: "User not authenticated" });
-      }
-      
-      if (!meetingLink) {
-        return res.status(400).json({ message: "Meeting link is required" });
-      }
-      
-      const slot = await storage.getInterviewSlotById(parseInt(id));
-      
-      // Check if the slot exists and the user is part of the interview
-      if (!slot) {
-        return res.status(404).json({ message: "Interview slot not found" });
-      }
-      
-      // Only the interviewer can update the meeting link
-      if (slot.interviewerId !== userId) {
-        return res.status(403).json({ message: "Only the interviewer can update the meeting link" });
-      }
-      
-      // Update the meeting link in storage
-      // For the purposes of this prototype, we'll just update the slot directly
-      // In a full implementation, you'd add a storage method for this
-      slot.meetingLink = meetingLink;
-      
-      res.json(slot);
-    } catch (error) {
-      res.status(500).json({ message: "Error updating meeting link" });
-    }
-  });
-
-  // Best Match API for finding most suitable peers
-  app.get("/api/best-match", ensureAuthenticated, async (req, res) => {
-    try {
-      const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ message: "User not authenticated" });
-      }
-      
-      const currentUser = await storage.getUser(userId);
-      if (!currentUser) {
-        return res.status(404).json({ message: "User not found" });
-      }
-      
-      // Get all users
-      const allUsers = await storage.getUsers();
-      
-      // Filter out current user
-      const potentialMatches = allUsers.filter(user => user.id !== userId);
-      
-      // Implement a simple matching algorithm based on:
-      // 1. Experience level (weight: 0.4)
-      // 2. Overlapping skills (weight: 0.6)
-      
-      const scoredMatches = potentialMatches.map(user => {
-        // Experience level match (exact match gets 1.0, adjacent levels get 0.5)
-        let experienceScore = 0;
-        if (user.experienceLevel === currentUser.experienceLevel) {
-          experienceScore = 1.0;
-        } else if (
-          (currentUser.experienceLevel === "Beginner" && user.experienceLevel === "Intermediate") ||
-          (currentUser.experienceLevel === "Intermediate" && user.experienceLevel === "Beginner") ||
-          (currentUser.experienceLevel === "Intermediate" && user.experienceLevel === "Advanced") ||
-          (currentUser.experienceLevel === "Advanced" && user.experienceLevel === "Intermediate")
-        ) {
-          experienceScore = 0.5;
-        }
-        
-        // Skill overlap calculation
-        const userSkills = new Set(user.skills);
-        const currentUserSkills = new Set(currentUser.skills);
-        
-        // Count overlapping skills
-        let overlappingSkills = 0;
-        currentUserSkills.forEach(skill => {
-          if (userSkills.has(skill)) {
-            overlappingSkills++;
-          }
-        });
-        
-        // Calculate skill score (percentage of the current user's skills that match)
-        const skillScore = currentUserSkills.size > 0 
-          ? overlappingSkills / currentUserSkills.size 
-          : 0;
-        
-        // Calculate combined score (weighted)
-        const combinedScore = (experienceScore * 0.4) + (skillScore * 0.6);
-        
-        return {
-          ...user,
-          matchScore: combinedScore
-        };
-      });
-      
-      // Sort by match score (descending)
-      scoredMatches.sort((a, b) => b.matchScore - a.matchScore);
-      
-      // Return top 5 matches
-      res.json(scoredMatches.slice(0, 5));
-    } catch (error) {
-      res.status(500).json({ message: "Error finding best matches" });
-    }
-  });
-
+  // Authentication Routes
+  app.post('/api/register', authController.register);
+  app.post('/api/login', passport.authenticate('local'), authController.login);
+  app.post('/api/logout', authController.logout);
+  app.get('/api/user', authController.getCurrentUser);
+  
+  // User Routes
+  app.get('/api/users', isAuthenticated, userController.getUsers);
+  app.get('/api/users/:id', isAuthenticated, userController.getUserById);
+  app.get('/api/users/experience/:level', isAuthenticated, userController.getUsersByExperienceLevel);
+  app.get('/api/users/skill/:skill', isAuthenticated, userController.getUsersBySkill);
+  app.put('/api/users/:id', isAuthenticated, userController.updateUser);
+  
+  // Match Request Routes
+  app.post('/api/match-requests', isAuthenticated, matchRequestController.createMatchRequest);
+  app.get('/api/match-requests/:id', isAuthenticated, matchRequestController.getMatchRequestById);
+  app.get('/api/match-requests', isAuthenticated, matchRequestController.getAllMatchRequests);
+  app.get('/api/match-requests/incoming', isAuthenticated, matchRequestController.getIncomingMatchRequests);
+  app.get('/api/match-requests/outgoing', isAuthenticated, matchRequestController.getOutgoingMatchRequests);
+  app.put('/api/match-requests/:id/status', isAuthenticated, matchRequestController.updateMatchRequestStatus);
+  
+  // Interview Slot Routes
+  app.post('/api/interview-slots', isAuthenticated, interviewSlotController.createInterviewSlot);
+  app.get('/api/interview-slots/:id', isAuthenticated, interviewSlotController.getInterviewSlotById);
+  app.get('/api/interview-slots', isAuthenticated, interviewSlotController.getAllUserInterviews);
+  app.get('/api/interview-slots/available', isAuthenticated, interviewSlotController.getAvailableSlots);
+  app.get('/api/interview-slots/upcoming', isAuthenticated, interviewSlotController.getUserUpcomingInterviews);
+  app.get('/api/interview-slots/past', isAuthenticated, interviewSlotController.getUserPastInterviews);
+  app.put('/api/interview-slots/:id/book', isAuthenticated, interviewSlotController.bookInterviewSlot);
+  app.put('/api/interview-slots/:id/cancel', isAuthenticated, interviewSlotController.cancelInterviewSlot);
+  
+  // Create HTTP server
   const httpServer = createServer(app);
+  
   return httpServer;
 }
