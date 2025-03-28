@@ -1,3 +1,0 @@
-[dev]
-name = "dev"
-entrypoint = "node start-dev.js"
