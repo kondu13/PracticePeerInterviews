@@ -2,11 +2,21 @@ import express from "express";
 import { registerRoutes } from "./routes.js";
 import { setupVite, serveStatic, log } from "./vite.js";
 import dotenv from "dotenv";
+import { startMongoMemoryServer } from './config/mongodb.js';
 
 // Load environment variables from .env file
 dotenv.config();
 
 async function main() {
+  try {
+    // Start MongoDB Memory Server
+    await startMongoMemoryServer();
+    log('MongoDB Memory Server started successfully');
+  } catch (error) {
+    log(`Failed to start MongoDB Memory Server: ${error.message}`, 'error');
+    throw error;
+  }
+  
   // Create Express app
   const app = express();
   

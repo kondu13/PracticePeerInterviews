@@ -103,19 +103,19 @@ export async function registerRoutes(app) {
   
   // Match Request Routes
   app.post('/api/match-requests', isAuthenticated, matchRequestController.createMatchRequest);
-  app.get('/api/match-requests/:id', isAuthenticated, matchRequestController.getMatchRequestById);
-  app.get('/api/match-requests', isAuthenticated, matchRequestController.getAllMatchRequests);
   app.get('/api/match-requests/incoming', isAuthenticated, matchRequestController.getIncomingMatchRequests);
   app.get('/api/match-requests/outgoing', isAuthenticated, matchRequestController.getOutgoingMatchRequests);
+  app.get('/api/match-requests/:id', isAuthenticated, matchRequestController.getMatchRequestById);
+  app.get('/api/match-requests', isAuthenticated, matchRequestController.getAllMatchRequests);
   app.put('/api/match-requests/:id/status', isAuthenticated, matchRequestController.updateMatchRequestStatus);
   
   // Interview Slot Routes
   app.post('/api/interview-slots', isAuthenticated, interviewSlotController.createInterviewSlot);
-  app.get('/api/interview-slots/:id', isAuthenticated, interviewSlotController.getInterviewSlotById);
-  app.get('/api/interview-slots', isAuthenticated, interviewSlotController.getAllUserInterviews);
   app.get('/api/interview-slots/available', isAuthenticated, interviewSlotController.getAvailableSlots);
   app.get('/api/interview-slots/upcoming', isAuthenticated, interviewSlotController.getUserUpcomingInterviews);
   app.get('/api/interview-slots/past', isAuthenticated, interviewSlotController.getUserPastInterviews);
+  app.get('/api/interview-slots/:id', isAuthenticated, interviewSlotController.getInterviewSlotById);
+  app.get('/api/interview-slots', isAuthenticated, interviewSlotController.getAllUserInterviews);
   app.put('/api/interview-slots/:id/book', isAuthenticated, interviewSlotController.bookInterviewSlot);
   app.put('/api/interview-slots/:id/cancel', isAuthenticated, interviewSlotController.cancelInterviewSlot);
   
