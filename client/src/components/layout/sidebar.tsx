@@ -34,9 +34,9 @@ export function Sidebar() {
         </div>
         
         <div className="space-y-1">
-          <Link href="/">
+          <Link href="/dashboard">
             <a className={`flex items-center px-3 py-2 text-sm font-medium rounded-md ${
-              isActive('/') 
+              isActive('/dashboard') 
                 ? 'bg-indigo-50 text-primary' 
                 : 'text-gray-700 hover:bg-gray-100'
             }`}>

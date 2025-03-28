@@ -4,7 +4,34 @@ import {
   useMutation,
   UseMutationResult,
 } from "@tanstack/react-query";
-import { insertUserSchema, User as SelectUser, InsertUser, LoginData } from "@shared/schema";
+// Define types based on our JavaScript schema
+type SelectUser = {
+  id: string;
+  username: string;
+  name: string;
+  email: string;
+  experienceLevel: string;
+  skills: string[];
+  targetRole?: string;
+  bio?: string;
+  avatarUrl?: string;
+};
+
+type LoginData = {
+  username: string;
+  password: string;
+};
+
+type InsertUser = {
+  username: string;
+  password: string;
+  fullName: string;
+  email: string;
+  experienceLevel: string;
+  skills: string[];
+  targetRole?: string;
+  bio?: string;
+};
 import { getQueryFn, apiRequest, queryClient } from "../lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
