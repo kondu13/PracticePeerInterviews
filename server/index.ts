@@ -1,6 +1,22 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes.js";
 import { setupVite, serveStatic, log } from "./vite";
+import dotenv from "dotenv";
+
+// Load environment variables from .env file
+dotenv.config();
+
+// Import MongoDB memory server dynamically to avoid TypeScript errors
+import("./config/mongodb.js").then(({ startMongoMemoryServer }) => {
+  // Start MongoDB Memory Server if needed
+  if (!process.env.MONGODB_URI || process.env.MONGODB_URI === 'mongodb://localhost:27017/mockinterviews') {
+    startMongoMemoryServer().catch((err: Error) => {
+      console.error('Failed to start MongoDB Memory Server:', err);
+    });
+  }
+}).catch((err: Error) => {
+  console.error('Error importing MongoDB memory server module:', err);
+});
 
 const app = express();
 app.use(express.json());

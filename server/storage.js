@@ -1,6 +1,7 @@
 import session from "express-session";
 import createMemoryStore from "memorystore";
 import { MongoClient } from "mongodb";
+import MongoStore from "connect-mongo";
 
 const MemoryStore = createMemoryStore(session);
 
@@ -173,8 +174,9 @@ export class MongoStorage {
   constructor(mongoUri) {
     this.mongoUri = mongoUri;
     this.client = new MongoClient(mongoUri);
-    this.sessionStore = new MemoryStore({
-      checkPeriod: 86400000, // 24 hours
+    this.sessionStore = MongoStore.create({
+      mongoUrl: mongoUri,
+      ttl: 24 * 60 * 60 // 24 hours
     });
     this.connected = false;
     this.connect();
@@ -393,7 +395,6 @@ export class MongoStorage {
   }
 }
 
-// Use the in-memory storage implementation for now
-// const MONGODB_URI = "mongodb+srv://user:password@cluster.mongodb.net/?retryWrites=true&w=majority";
-// export const storage = new MongoStorage(MONGODB_URI);
-export const storage = new MemStorage();
+// Use MongoDB storage
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/mockinterviews";
+export const storage = new MongoStorage(MONGODB_URI);

@@ -4,17 +4,15 @@ import { log } from '../vite.js';
 // MongoDB connection function
 const connectDB = async () => {
   try {
-    // Use local MongoDB for development
-    const localURI = 'mongodb://localhost:27017/interview-platform';
-    // Allow for a production MongoDB connection string in environment
-    const mongoURI = process.env.MONGO_URI || localURI;
+    // Get MongoDB URI from environment variable
+    const mongoURI = process.env.MONGODB_URI || 'mongodb://localhost:27017/mockinterviews';
     
     const conn = await mongoose.connect(mongoURI);
     
     log(`MongoDB Connected: ${conn.connection.host}`, 'mongodb');
     return conn;
   } catch (error) {
-    log(`Error: ${error.message}`, 'mongodb');
+    log(`Error connecting to MongoDB: ${error.message}`, 'mongodb');
     process.exit(1);
   }
 };

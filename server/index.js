@@ -1,6 +1,10 @@
 import express from "express";
 import { registerRoutes } from "./routes.js";
 import { setupVite, serveStatic, log } from "./vite.js";
+import dotenv from "dotenv";
+
+// Load environment variables from .env file
+dotenv.config();
 
 async function main() {
   // Create Express app
