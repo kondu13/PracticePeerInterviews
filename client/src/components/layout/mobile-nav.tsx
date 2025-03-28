@@ -23,7 +23,8 @@ export function MobileNav() {
   
   if (!user) return null;
   
-  const getInitials = (name: string) => {
+  const getInitials = (name?: string) => {
+    if (!name) return "U"; // Default to "U" for user if name is undefined
     return name
       .split(' ')
       .map(part => part[0])
@@ -60,7 +61,7 @@ export function MobileNav() {
             
             <div className="flex flex-col space-y-2">
               <Link href="/">
-                <a 
+                <div 
                   className={`flex items-center px-4 py-3 text-base font-medium rounded-md ${
                     location === '/' ? 'bg-indigo-50 text-primary' : 'text-gray-700'
                   }`}
@@ -68,10 +69,10 @@ export function MobileNav() {
                 >
                   <Home className="w-5 h-5 mr-3" />
                   Dashboard
-                </a>
+                </div>
               </Link>
               <Link href="/scheduled-interviews">
-                <a 
+                <div 
                   className={`flex items-center px-4 py-3 text-base font-medium rounded-md ${
                     location === '/scheduled-interviews' ? 'bg-indigo-50 text-primary' : 'text-gray-700'
                   }`}
@@ -79,10 +80,10 @@ export function MobileNav() {
                 >
                   <CalendarDays className="w-5 h-5 mr-3" />
                   My Schedule
-                </a>
+                </div>
               </Link>
               <Link href="/match-requests">
-                <a 
+                <div 
                   className={`flex items-center px-4 py-3 text-base font-medium rounded-md ${
                     location === '/match-requests' ? 'bg-indigo-50 text-primary' : 'text-gray-700'
                   }`}
@@ -95,10 +96,10 @@ export function MobileNav() {
                       {pendingRequestsCount}
                     </span>
                   )}
-                </a>
+                </div>
               </Link>
               <Link href="/profile">
-                <a 
+                <div 
                   className={`flex items-center px-4 py-3 text-base font-medium rounded-md ${
                     location === '/profile' ? 'bg-indigo-50 text-primary' : 'text-gray-700'
                   }`}
@@ -106,7 +107,7 @@ export function MobileNav() {
                 >
                   <User className="w-5 h-5 mr-3" />
                   My Profile
-                </a>
+                </div>
               </Link>
             </div>
             
@@ -145,19 +146,19 @@ export function MobileNav() {
       <div className="bg-white border-t border-gray-200 fixed bottom-0 inset-x-0 z-10 md:hidden">
         <div className="grid grid-cols-4 h-16">
           <Link href="/">
-            <a className={`flex flex-col items-center justify-center ${location === '/' ? 'text-primary' : 'text-gray-500'}`}>
+            <div className={`flex flex-col items-center justify-center ${location === '/' ? 'text-primary' : 'text-gray-500'}`}>
               <Home className="text-xl" />
               <span className="text-xs mt-1">Home</span>
-            </a>
+            </div>
           </Link>
           <Link href="/scheduled-interviews">
-            <a className={`flex flex-col items-center justify-center ${location === '/scheduled-interviews' ? 'text-primary' : 'text-gray-500'}`}>
+            <div className={`flex flex-col items-center justify-center ${location === '/scheduled-interviews' ? 'text-primary' : 'text-gray-500'}`}>
               <CalendarDays className="text-xl" />
               <span className="text-xs mt-1">Schedule</span>
-            </a>
+            </div>
           </Link>
           <Link href="/match-requests">
-            <a className={`flex flex-col items-center justify-center ${location === '/match-requests' ? 'text-primary' : 'text-gray-500'}`}>
+            <div className={`flex flex-col items-center justify-center ${location === '/match-requests' ? 'text-primary' : 'text-gray-500'}`}>
               <div className="relative">
                 <Bell className="text-xl" />
                 {pendingRequestsCount > 0 && (
@@ -167,13 +168,13 @@ export function MobileNav() {
                 )}
               </div>
               <span className="text-xs mt-1">Requests</span>
-            </a>
+            </div>
           </Link>
           <Link href="/profile">
-            <a className={`flex flex-col items-center justify-center ${location === '/profile' ? 'text-primary' : 'text-gray-500'}`}>
+            <div className={`flex flex-col items-center justify-center ${location === '/profile' ? 'text-primary' : 'text-gray-500'}`}>
               <User className="text-xl" />
               <span className="text-xs mt-1">Profile</span>
-            </a>
+            </div>
           </Link>
         </div>
       </div>

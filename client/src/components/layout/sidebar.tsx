@@ -10,7 +10,8 @@ export function Sidebar() {
   
   if (!user) return null;
   
-  const getInitials = (name: string) => {
+  const getInitials = (name?: string) => {
+    if (!name) return "U"; // Default to "U" for user if name is undefined
     return name
       .split(' ')
       .map(part => part[0])
@@ -35,54 +36,54 @@ export function Sidebar() {
         
         <div className="space-y-1">
           <Link href="/dashboard">
-            <a className={`flex items-center px-3 py-2 text-sm font-medium rounded-md ${
+            <div className={`flex items-center px-3 py-2 text-sm font-medium rounded-md ${
               isActive('/dashboard') 
                 ? 'bg-indigo-50 text-primary' 
                 : 'text-gray-700 hover:bg-gray-100'
             }`}>
               <Home className="w-5 h-5 mr-2" />
               Dashboard
-            </a>
+            </div>
           </Link>
           <Link href="/scheduled-interviews">
-            <a className={`flex items-center px-3 py-2 text-sm font-medium rounded-md ${
+            <div className={`flex items-center px-3 py-2 text-sm font-medium rounded-md ${
               isActive('/scheduled-interviews') 
                 ? 'bg-indigo-50 text-primary' 
                 : 'text-gray-700 hover:bg-gray-100'
             }`}>
               <CalendarDays className="w-5 h-5 mr-2" />
               My Schedule
-            </a>
+            </div>
           </Link>
           <Link href="/match-requests">
-            <a className={`flex items-center px-3 py-2 text-sm font-medium rounded-md ${
+            <div className={`flex items-center px-3 py-2 text-sm font-medium rounded-md ${
               isActive('/match-requests') 
                 ? 'bg-indigo-50 text-primary' 
                 : 'text-gray-700 hover:bg-gray-100'
             }`}>
               <Clock className="w-5 h-5 mr-2" />
               Match Requests
-            </a>
+            </div>
           </Link>
           <Link href="/profile">
-            <a className={`flex items-center px-3 py-2 text-sm font-medium rounded-md ${
+            <div className={`flex items-center px-3 py-2 text-sm font-medium rounded-md ${
               isActive('/profile') 
                 ? 'bg-indigo-50 text-primary' 
                 : 'text-gray-700 hover:bg-gray-100'
             }`}>
               <User className="w-5 h-5 mr-2" />
               My Profile
-            </a>
+            </div>
           </Link>
           <Link href="/settings">
-            <a className={`flex items-center px-3 py-2 text-sm font-medium rounded-md ${
+            <div className={`flex items-center px-3 py-2 text-sm font-medium rounded-md ${
               isActive('/settings') 
                 ? 'bg-indigo-50 text-primary' 
                 : 'text-gray-700 hover:bg-gray-100'
             }`}>
               <Settings className="w-5 h-5 mr-2" />
               Settings
-            </a>
+            </div>
           </Link>
         </div>
       </div>
